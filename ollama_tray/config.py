@@ -177,6 +177,11 @@ ollama_models_dir =
 # Set to 1 to restore AMD default behaviour; leave blank on non-AMD systems
 hsa_enable_sdma =
 
+# ── Recovery ──────────────────────────────────────────────────────────────────
+
+# Automatically restart Ollama when it stops unexpectedly: true | false
+auto_recover = false
+
 # ── Window / UI theme ─────────────────────────────────────────────────────────
 
 # Theme for tkinter dialogs: dark | light | black
@@ -269,6 +274,7 @@ def _apply(cp: configparser.ConfigParser) -> None:
     g["OLLAMA_NUM_PARALLEL"]      = _i(cp, "ollama_num_parallel",       1)
     g["OLLAMA_MAX_LOADED_MODELS"] = _i(cp, "ollama_max_loaded_models",  1)
     g["HSA_ENABLE_SDMA"]          = _s(cp, "hsa_enable_sdma",           "")
+    g["AUTO_RECOVER"]             = _s(cp, "auto_recover",              "false").lower() == "true"
 
 
 # ── initial load ──────────────────────────────────────────────────────────────

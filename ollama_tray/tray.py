@@ -66,7 +66,7 @@ class OllamaTray:
                 self._icon.title = f"Ollama — {self._status.capitalize()}"
 
     def _poll(self):
-        from ollama_tray.platform import get_status
+        from ollama_tray.platform import get_status, service_action
         while True:
             time.sleep(_cfg.STATS_INTERVAL)
             self._tick += 1
@@ -77,6 +77,10 @@ class OllamaTray:
                 new = get_status()
                 with self._lock:
                     if new != self._status:
+                        if _cfg.AUTO_RECOVER and new == "stopped":
+                            threading.Thread(
+                                target=service_action, args=("start",), daemon=True
+                            ).start()
                         self._status = new
                         if self._icon:
                             self._icon.icon  = make_icon(new)

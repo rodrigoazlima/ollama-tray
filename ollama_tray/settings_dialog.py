@@ -224,6 +224,20 @@ def _run_dialog() -> None:
         sdma_var = tk.StringVar(value=_cfg.HSA_ENABLE_SDMA)
         mono_entry(sdma_var, width=8)
 
+        # ── Recovery ──────────────────────────────────────────────────────────
+        section("Recovery")
+
+        row("Auto-recover Ollama", "restart Ollama automatically if it stops unexpectedly")
+        recover_var = tk.BooleanVar(value=_cfg.AUTO_RECOVER)
+        tk.Checkbutton(
+            body, text="Enabled",
+            variable=recover_var,
+            bg=c["bg"], fg=c["fg"],
+            activebackground=c["bg"], activeforeground=c["fg"],
+            selectcolor=c["surface"],
+            font=(_UI_FONT, 9),
+        ).pack(anchor="w", pady=(3, 0))
+
         # ── footer ────────────────────────────────────────────────────────────
         footer = tk.Frame(root, bg=c["bg_dark"], pady=12, padx=20)
         footer.pack(fill="x")
@@ -239,6 +253,7 @@ def _run_dialog() -> None:
                 "ollama_max_loaded_models": maxmod_var.get().strip() or "1",
                 "ollama_num_parallel":      parallel_var.get().strip() or "1",
                 "hsa_enable_sdma":          sdma_var.get().strip() or "0",
+                "auto_recover":             "true" if recover_var.get() else "false",
             })
             _cfg.reload()
             root.destroy()

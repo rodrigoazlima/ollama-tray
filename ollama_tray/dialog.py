@@ -113,6 +113,22 @@ def _run_dialog() -> None:
         txt.tag_configure("dim",    foreground=c["dim"])
         txt.tag_configure("sep",    foreground=c["surface"])
 
+        btn_frame = tk.Frame(root, bg=c["bg_dark"], pady=6, padx=12)
+
+        def _start_ollama():
+            from ollama_tray.platform import service_action
+            import threading
+            threading.Thread(target=service_action, args=("start",), daemon=True).start()
+
+        tk.Button(
+            btn_frame, text="Start Ollama",
+            command=_start_ollama,
+            bg=c["green"], fg=c["bg"],
+            font=(_UI_FONT, 10, "bold"),
+            relief="flat", padx=14, pady=5, cursor="hand2",
+            activebackground=c["green_act"], activeforeground=c["bg"],
+        ).pack(side="left")
+
         footer = tk.Label(
             root, text="",
             bg=c["bg_dark"], fg=c["dim"],
@@ -135,7 +151,9 @@ def _run_dialog() -> None:
             if s.is_empty():
                 txt.insert("end", "\n  No Ollama processes found.\n\n", "dim")
                 txt.insert("end", "  Service may be stopped.\n", "dim")
+                btn_frame.pack(fill="x", before=footer)
             else:
+                btn_frame.pack_forget()
                 txt.insert("end",
                     f"  {'Process':<22} {'PID':>6}  {'CPU%':>6}  {'RSS':>9}\n", "header")
                 txt.insert("end", "  " + sep, "sep")
