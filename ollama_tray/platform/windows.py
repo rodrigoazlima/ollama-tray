@@ -298,6 +298,10 @@ def cli_install() -> int:
         print(f"Error: could not write autostart registry key: {e}", file=sys.stderr)
         return 1
     print(f"Installed autostart: HKCU Run '{TASK_NAME}' -> {value}")
+    # Launch tray immediately so user doesn't have to log out and back in.
+    args = [exe] if getattr(sys, "frozen", False) else [exe, os.path.abspath(sys.argv[0])]
+    subprocess.Popen(args, close_fds=True)
+    print("Started tray application.")
     return 0
 
 

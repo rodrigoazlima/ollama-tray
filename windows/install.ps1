@@ -1,15 +1,16 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Install and optionally auto-start the Ollama system tray app.
+  Install and start the Ollama system tray app.
 
 .DESCRIPTION
   1. Installs Python dependencies (pystray, Pillow, pywin32, psutil).
   2. Registers autostart in HKCU\...\Run so the tray icon appears at every logon.
+  3. Launches the tray app immediately — no logon required.
      No admin rights required.
 
 .PARAMETER Uninstall
-  Remove the OllamaTray autostart entry.
+  Stop the running tray and remove the OllamaTray autostart entry.
 
 .PARAMETER NoDeps
   Skip pip install step.
@@ -18,9 +19,9 @@
   Python executable to use. Default: "python".
 
 .EXAMPLE
-  .\windows\install.ps1              # install deps + register autostart
-  .\windows\install.ps1 -Uninstall   # remove autostart
-  .\windows\install.ps1 -NoDeps      # skip pip, just register autostart
+  .\windows\install.ps1              # install deps, register autostart, start now
+  .\windows\install.ps1 -Uninstall   # stop tray + remove autostart
+  .\windows\install.ps1 -NoDeps      # skip pip, just register autostart + start
 #>
 
 param(
@@ -35,6 +36,10 @@ $TaskName   = "OllamaTray"
 
 # ── uninstall ────────────────────────────────────────────────────────────────
 if ($Uninstall) {
+    Write-Host "Stopping tray process (if running)..."
+    Get-Process -Name "python", "ollama-tray" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like "*ollama_tray*" } |
+        Stop-Process -Force
     Write-Host "Removing autostart entry '$TaskName'..."
     try {
         Remove-ItemProperty `
@@ -69,10 +74,15 @@ Set-ItemProperty `
     -Name $TaskName `
     -Value $Cmd
 
+# ── launch now ───────────────────────────────────────────────────────────────
+Write-Host "Starting tray application..."
+Get-Process -Name "python", "ollama-tray" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like "*ollama_tray*" } |
+    Stop-Process -Force
+Start-Process -FilePath $PythonPath -ArgumentList "-m", "ollama_tray" -WindowStyle Hidden
+
 Write-Host ""
-Write-Host "Installed. Tray icon appears after next logon."
-Write-Host "To start now:"
-Write-Host "  & `"$PythonPath`" -m ollama_tray"
+Write-Host "Installed and started. Tray icon is active now and will reappear at every logon."
 Write-Host ""
 Write-Host "CLI commands:"
 Write-Host "  python -m ollama_tray --status     # print service status"
