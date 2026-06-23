@@ -10,19 +10,22 @@ from pathlib import Path
 
 _TASK_NAME = "OllamaTray"
 
-# When frozen, __file__ is inside the PyInstaller bundle.
-# Repo root is two levels above windows/setup_installer.py in source,
-# but at runtime the exe sits next to requirements.txt if distributed flat,
-# so check a few candidates.
-def _repo_root() -> Path:
+def _requirements_path() -> Path | None:
+    # When frozen, PyInstaller extracts datas into sys._MEIPASS — check there first.
     if getattr(sys, "frozen", False):
-        here = Path(sys.executable).parent
-    else:
-        here = Path(__file__).parent.parent
-    for candidate in [here, here.parent]:
-        if (candidate / "requirements.txt").exists():
-            return candidate
-    return here
+        bundled = Path(sys._MEIPASS) / "requirements.txt"
+        if bundled.exists():
+            return bundled
+    # Source layout: repo root is two levels above windows/setup_installer.py
+    for candidate in [
+        Path(__file__).parent.parent,
+        Path(sys.executable).parent,
+        Path(sys.executable).parent.parent,
+    ]:
+        p = candidate / "requirements.txt"
+        if p.exists():
+            return p
+    return None
 
 
 def _find_python() -> str | None:
@@ -140,10 +143,9 @@ def run_gui() -> None:
             return
         _log(f"Python: {python}", DIM)
 
-        repo = _repo_root()
-        req  = repo / "requirements.txt"
-        if not req.exists():
-            _log(f"ERROR: requirements.txt not found at {req}", RED)
+        req = _requirements_path()
+        if req is None:
+            _log("ERROR: requirements.txt not found (checked bundle + exe dir).", RED)
             status_var.set("requirements.txt not found.")
             btn.configure(state="normal", text="Retry")
             return
