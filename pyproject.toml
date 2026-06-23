@@ -4,7 +4,7 @@ build-backend = "setuptools.backends.legacy:build"
 
 [project]
 name = "ollama-tray"
-version = "1.0.0"
+version = "1.1.0-pre.1"
 description = "System tray manager for the Ollama service (Windows/Linux)"
 readme = "README.md"
 license = { file = "LICENSE" }

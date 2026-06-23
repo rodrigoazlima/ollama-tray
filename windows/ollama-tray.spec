@@ -6,7 +6,7 @@
 import os
 from pathlib import Path
 
-_here = Path(SPECPATH)
+_here = Path(SPECPATH).parent   # repo root (spec lives in windows/)
 _src  = str(_here / "ollama_tray" / "__main__.py")
 _ico  = os.path.join(
     os.environ.get("LOCALAPPDATA", ""),
@@ -19,6 +19,7 @@ a = Analysis(
     pathex=[str(_here)],
     binaries=[],
     datas=[(str(_here / "assets"), "assets")],
+
     hiddenimports=[
         "ollama_tray.platform.windows",
         "win32service",

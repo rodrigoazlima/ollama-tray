@@ -221,7 +221,7 @@ def service_action(action: str) -> None:
 
 def _win_error_message(code: int) -> str:
     messages = {
-        _ERROR_ACCESS_DENIED:           "Access denied — try running as administrator.",
+        _ERROR_ACCESS_DENIED:           "Access denied - try running as administrator.",
         _ERROR_SERVICE_ALREADY_RUNNING: f"Service '{SERVICE_NAME}' is already running.",
         _ERROR_SERVICE_NOT_ACTIVE:      f"Service '{SERVICE_NAME}' is not running.",
         _ERROR_SERVICE_DOES_NOT_EXIST:  (
@@ -297,7 +297,7 @@ def cli_install() -> int:
     except OSError as e:
         print(f"Error: could not write autostart registry key: {e}", file=sys.stderr)
         return 1
-    print(f"Installed autostart: HKCU Run '{TASK_NAME}' → {value}")
+    print(f"Installed autostart: HKCU Run '{TASK_NAME}' -> {value}")
     return 0
 
 
@@ -312,7 +312,7 @@ def cli_uninstall() -> int:
         winreg.CloseKey(key)
         print(f"Removed autostart: HKCU Run '{TASK_NAME}'")
     except FileNotFoundError:
-        print(f"'{TASK_NAME}' not in Run key — nothing to remove.")
+        print(f"'{TASK_NAME}' not in Run key - nothing to remove.")
     except OSError as e:
         print(f"Error: could not modify autostart registry key: {e}", file=sys.stderr)
         return 1
