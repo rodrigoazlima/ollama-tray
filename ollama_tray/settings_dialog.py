@@ -72,6 +72,20 @@ def _run_dialog() -> None:
         root.configure(bg=c["bg"])
         root.attributes("-topmost", True)
 
+        from ollama_tray.icon import _icon_path
+        if _icon_path:
+            if _icon_path.endswith(".ico"):
+                try:
+                    root.iconbitmap(_icon_path)
+                except Exception:
+                    pass
+            elif _icon_path.endswith(".png"):
+                try:
+                    img = tk.PhotoImage(file=_icon_path)
+                    root.iconphoto(True, img)
+                except Exception:
+                    pass
+
         w, h = 520, 580
         root.update_idletasks()
         x = (root.winfo_screenwidth()  - w) // 2
