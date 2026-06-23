@@ -33,6 +33,7 @@ MANIFEST
 *.spec
 !windows/ollama-tray.spec
 !windows/setup.spec
+!linux/ollama-tray.spec
 
 # Installer logs
 pip-log.txt

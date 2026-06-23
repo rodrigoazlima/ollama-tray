@@ -49,6 +49,35 @@ jobs:
             dist/ollama-tray.exe
             dist/setup.exe
 
+  build-linux:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
+            gir1.2-ayatanaappindicator3-0.1 \
+            python3-tk upx-ucl
+
+      - name: Install Python dependencies
+        run: pip install -r requirements-linux.txt pyinstaller
+
+      - name: Build Linux binary
+        run: pyinstaller linux/ollama-tray.spec --distpath=dist --workpath=build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-binary
+          path: dist/ollama-tray
+
   build-wheel:
     needs: test
     runs-on: ubuntu-latest
@@ -70,7 +99,7 @@ jobs:
           path: dist/*.whl
 
   release:
-    needs: [build-windows, build-wheel]
+    needs: [build-windows, build-linux, build-wheel]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -82,6 +111,8 @@ jobs:
           TAG="${{ github.ref_name }}"
           cp artifacts/windows-exe/ollama-tray.exe "ollama-tray-${TAG}-windows-x64.exe"
           cp artifacts/windows-exe/setup.exe       "setup-${TAG}-windows-x64.exe"
+          cp artifacts/linux-binary/ollama-tray    "ollama-tray-${TAG}-linux-x64"
+          chmod +x "ollama-tray-${TAG}-linux-x64"
           cp artifacts/python-wheel/*.whl .
 
       - uses: softprops/action-gh-release@v2
@@ -92,4 +123,5 @@ jobs:
           files: |
             ollama-tray-${{ github.ref_name }}-windows-x64.exe
             setup-${{ github.ref_name }}-windows-x64.exe
+            ollama-tray-${{ github.ref_name }}-linux-x64
             *.whl
