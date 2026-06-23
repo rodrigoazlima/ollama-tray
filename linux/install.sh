@@ -24,7 +24,7 @@ for arg in "$@"; do
 done
 
 if [[ "$UNINSTALL" == true ]]; then
-  "$PYTHON" "$SCRIPT_DIR/ollama_tray_linux.py" --uninstall
+  "$PYTHON" -m ollama_tray --uninstall
   exit $?
 fi
 
@@ -61,12 +61,12 @@ if [[ "$NO_DEPS" == false ]]; then
   fi
 
   echo "==> Installing Python dependencies..."
-  "$PYTHON" -m pip install --user pystray Pillow psutil
+  "$PYTHON" -m pip install --user -r "$SCRIPT_DIR/requirements-linux.txt"
 fi
 
 echo "==> Registering autostart..."
-"$PYTHON" "$SCRIPT_DIR/ollama_tray_linux.py" --install
+cd "$SCRIPT_DIR" && "$PYTHON" -m ollama_tray --install
 
 echo ""
 echo "Done. Launch now with:"
-echo "  $PYTHON $SCRIPT_DIR/ollama_tray_linux.py"
+echo "  cd $SCRIPT_DIR && $PYTHON -m ollama_tray"

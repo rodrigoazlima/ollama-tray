@@ -82,15 +82,17 @@ def _is_root() -> bool:
     return os.getuid() == 0
 
 
-def _elevate(action: str) -> None:
+def _elevate(action: str) -> bool:
+    """Try graphical privilege elevation. Returns True if an elevator was launched."""
     exe = sys.executable
     script = os.path.abspath(sys.argv[0])
     for elevator in ("pkexec", "kdesu", "gksudo", "gksu"):
         try:
             subprocess.Popen([elevator, exe, script, f"--{action}"])
-            return
+            return True
         except FileNotFoundError:
             continue
+    return False
 
 
 def _svc_start() -> None:
@@ -103,16 +105,31 @@ def _svc_stop() -> None:
 
 def service_action(action: str) -> None:
     if _SERVICE_MODE is None:
+        from ollama_tray.checks import _show_warning
+        _show_warning(
+            "ollama-tray: no service found",
+            "No Ollama systemd unit found.\n"
+            "Install Ollama: curl -fsSL https://ollama.com/install.sh | sh",
+        )
         return
     needs_root = _SERVICE_MODE == "system" and not _is_root()
     if needs_root:
-        _elevate(action)
+        if not _elevate(action):
+            from ollama_tray.checks import _show_warning
+            _show_warning(
+                "ollama-tray: elevation failed",
+                "Root access is required to control the system Ollama service,\n"
+                "but no graphical privilege elevator (pkexec/kdesu/gksudo) was found.\n\n"
+                "Run manually:\n  sudo systemctl " + action + " ollama",
+            )
         return
     try:
         if action == "start":
             _svc_start()
         elif action == "stop":
             _svc_stop()
+    except subprocess.TimeoutExpired:
+        pass  # systemctl timed out — transient, ignore in tray context
     except Exception:
         pass
 

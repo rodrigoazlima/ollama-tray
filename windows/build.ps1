@@ -5,31 +5,16 @@
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot  = Split-Path -Parent $ScriptDir
-$Src       = Join-Path $RepoRoot "ollama_tray.py"
-$Ico       = "$env:LOCALAPPDATA\Programs\Ollama\app.ico"
+$Spec      = Join-Path $ScriptDir "ollama-tray.spec"
 $Dist      = Join-Path $RepoRoot "dist"
 $Build     = Join-Path $RepoRoot "build"
 
-if (-not (Test-Path $Ico)) {
-    Write-Warning "Ollama icon not found at $Ico — using PyInstaller default"
-    $IconArg = @()
-} else {
-    $IconArg = @("--icon=$Ico")
-}
-
-pyinstaller @IconArg `
-    --onefile `
-    --noconsole `
-    --name="ollama-tray" `
-    --distpath="$Dist" `
-    --workpath="$Build" `
-    --specpath="$RepoRoot" `
-    "$Src"
+pyinstaller "$Spec" --distpath="$Dist" --workpath="$Build"
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
     Write-Host "Built:  $Dist\ollama-tray.exe"
     Write-Host "Run:    & '$Dist\ollama-tray.exe'"
-    Write-Host "Install autostart with the exe:"
+    Write-Host "Install autostart:"
     Write-Host "    & '$Dist\ollama-tray.exe' --install"
 }

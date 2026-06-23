@@ -1,13 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 # PyInstaller spec for ollama-tray.
 # Build via: pyinstaller windows/ollama-tray.spec
-# Or use:    .\windows\build.ps1  (handles icon lookup automatically)
+# Or use:    .\windows\build.ps1
 
 import os
 from pathlib import Path
 
-_here = Path(SPECPATH)          # repo root (--specpath points here)
-_src  = str(_here / "ollama_tray.py")
+_here = Path(SPECPATH)
+_src  = str(_here / "ollama_tray" / "__main__.py")
 _ico  = os.path.join(
     os.environ.get("LOCALAPPDATA", ""),
     "Programs", "Ollama", "app.ico",
@@ -16,10 +16,15 @@ _icon_arg = [_ico] if os.path.exists(_ico) else []
 
 a = Analysis(
     [_src],
-    pathex=[],
+    pathex=[str(_here)],
     binaries=[],
-    datas=[],
-    hiddenimports=[],
+    datas=[(str(_here / "assets"), "assets")],
+    hiddenimports=[
+        "ollama_tray.platform.windows",
+        "win32service",
+        "win32con",
+        "pywintypes",
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

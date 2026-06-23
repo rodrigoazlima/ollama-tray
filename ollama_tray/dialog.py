@@ -1,7 +1,6 @@
 import sys
 import threading
 import time
-import tkinter as tk
 from datetime import datetime
 
 from ollama_tray.constants import TOGGLE_DEBOUNCE_S
@@ -9,7 +8,7 @@ from ollama_tray.stats import _fmt_bytes, refresh_stats
 
 _dialog_lock      = threading.Lock()
 _dialog_open      = False
-_dialog_root: tk.Tk | None = None
+_dialog_root      = None  # tk.Tk when open; untyped to allow deferred tkinter import
 _last_toggle_time = 0.0
 
 if sys.platform == "win32":
@@ -49,6 +48,15 @@ def open_resource_dialog() -> None:
 
 def _run_dialog() -> None:
     try:
+        try:
+            import tkinter as tk
+        except ImportError:
+            print(
+                "ollama-tray: tkinter not available — resource monitor dialog disabled",
+                file=sys.stderr,
+            )
+            return
+
         root = tk.Tk()
         with _dialog_lock:
             global _dialog_root
@@ -107,10 +115,13 @@ def _run_dialog() -> None:
         )
         footer.pack(fill="x")
 
-        def _cpu_tag(pct): return "good" if pct < 30 else "warn" if pct < 70 else "bad"
-        def _mem_tag(mb):  return "good" if mb < 2048 else "warn" if mb < 6144 else "bad"
+        def _cpu_tag(pct: float) -> str:
+            return "good" if pct < 30 else "warn" if pct < 70 else "bad"
 
-        def _update():
+        def _mem_tag(mb: float) -> str:
+            return "good" if mb < 2048 else "warn" if mb < 6144 else "bad"
+
+        def _update() -> None:
             s = refresh_stats()
             txt.configure(state="normal")
             txt.delete("1.0", "end")
@@ -139,12 +150,12 @@ def _run_dialog() -> None:
                 txt.insert("end", "\n  " + sep, "sep")
 
                 rows = [
-                    ("CPU (total)",  f"{s.cpu_pct:.1f}%",       _cpu_tag(s.cpu_pct)),
-                    ("RAM  RSS",     _fmt_bytes(s.mem_rss),      _mem_tag(s.mem_rss/1024**2)),
-                    ("RAM  VMS",     _fmt_bytes(s.mem_vms),      "dim"),
-                    ("Threads",      str(s.threads),             "good"),
-                    ("Processes",    str(s.num_procs),           "dim"),
-                    ("Uptime",       s.uptime,                   "dim"),
+                    ("CPU (total)", f"{s.cpu_pct:.1f}%",      _cpu_tag(s.cpu_pct)),
+                    ("RAM  RSS",    _fmt_bytes(s.mem_rss),     _mem_tag(s.mem_rss / 1024 ** 2)),
+                    ("RAM  VMS",    _fmt_bytes(s.mem_vms),     "dim"),
+                    ("Threads",     str(s.threads),            "good"),
+                    ("Processes",   str(s.num_procs),          "dim"),
+                    ("Uptime",      s.uptime,                  "dim"),
                 ]
                 if s.handles:
                     rows.insert(4, ("Handles", str(s.handles), "dim"))

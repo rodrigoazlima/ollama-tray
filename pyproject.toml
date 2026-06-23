@@ -4,8 +4,8 @@ build-backend = "setuptools.backends.legacy:build"
 
 [project]
 name = "ollama-tray"
-version = "0.1.0"
-description = "Windows system tray manager for the Ollama service"
+version = "1.0.0"
+description = "System tray manager for the Ollama service (Windows/Linux)"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"

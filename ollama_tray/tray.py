@@ -74,6 +74,7 @@ class OllamaTray:
                     pass
 
     def run(self):
+        import sys
         from ollama_tray.platform import get_status, init as platform_init
         platform_init()
         self._status = get_status()
@@ -97,4 +98,18 @@ class OllamaTray:
             menu=menu,
         )
         threading.Thread(target=self._poll, daemon=True).start()
-        self._icon.run()
+        try:
+            self._icon.run()
+        except Exception as exc:
+            from ollama_tray.checks import _show_fatal
+            _show_fatal(
+                "ollama-tray: tray backend error",
+                f"Failed to start system tray icon:\n{exc}\n\n"
+                + (
+                    "On Linux, ensure system tray libraries are installed:\n"
+                    "  sudo apt install gir1.2-ayatanaappindicator3-0.1 python3-gi"
+                    if sys.platform != "win32"
+                    else ""
+                ),
+            )
+            sys.exit(1)

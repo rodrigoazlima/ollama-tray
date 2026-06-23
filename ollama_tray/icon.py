@@ -1,4 +1,4 @@
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 
 from ollama_tray.constants import ICON_SIZE, STATUS_COLOR
 
@@ -14,17 +14,23 @@ def set_icon_path(path: str | None) -> None:
 
 def _base_image() -> Image.Image:
     if _icon_path:
-        img = Image.open(_icon_path).convert("RGBA")
-        return img.resize((ICON_SIZE, ICON_SIZE), Image.LANCZOS)
+        try:
+            img = Image.open(_icon_path).convert("RGBA")
+            return img.resize((ICON_SIZE, ICON_SIZE), Image.LANCZOS)
+        except (OSError, UnidentifiedImageError, ValueError):
+            # Icon file corrupt or unreadable — fall through to generated icon
+            pass
+
     img = Image.new("RGBA", (ICON_SIZE, ICON_SIZE), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     draw.ellipse([2, 2, ICON_SIZE - 2, ICON_SIZE - 2], fill=(30, 30, 30, 230))
+    font: ImageFont.ImageFont | ImageFont.FreeTypeFont = ImageFont.load_default()
     for name in ("arial.ttf", "DejaVuSans-Bold.ttf"):
         try:
             font = ImageFont.truetype(name, 30)
             break
-        except Exception:
-            font = ImageFont.load_default()
+        except (OSError, IOError):
+            continue
     draw.text((18, 14), "O", fill=(200, 200, 200), font=font)
     return img
 

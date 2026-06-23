@@ -13,6 +13,12 @@ def main() -> None:
     g.add_argument("--uninstall", action="store_true")
     args = p.parse_args()
 
+    cli_mode = any(getattr(args, n) for n in
+                   ("start", "stop", "restart", "status", "install", "uninstall"))
+
+    from ollama_tray.checks import run_startup_checks
+    run_startup_checks(gui=not cli_mode)
+
     from ollama_tray import platform as _plat
 
     for name, fn in {
