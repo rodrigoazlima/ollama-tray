@@ -107,7 +107,7 @@ Why:
 
 3. Start the tray immediately (no reboot needed)
    ```sh
-   python ollama_tray.py
+   python -m ollama_tray
    ```
 
 #### Option B — install as Python package
@@ -159,13 +159,13 @@ Color coding: green < 30% CPU / < 2 GB RAM · amber < 70% / < 6 GB · red above.
 **CLI flags**
 
 ```sh
-python ollama_tray.py              # launch tray (default)
-python ollama_tray.py --status     # print service status (exit 0 = running)
-python ollama_tray.py --start      # start service  (UAC prompt if needed)
-python ollama_tray.py --stop       # stop service   (UAC prompt if needed)
-python ollama_tray.py --restart    # stop → 2 s delay → start
-python ollama_tray.py --install    # register HKCU Run key autostart
-python ollama_tray.py --uninstall  # remove HKCU Run key autostart
+python -m ollama_tray              # launch tray (default)
+python -m ollama_tray --status     # print service status (exit 0 = running)
+python -m ollama_tray --start      # start service  (UAC prompt if needed)
+python -m ollama_tray --stop       # stop service   (UAC prompt if needed)
+python -m ollama_tray --restart    # stop → 2 s delay → start
+python -m ollama_tray --install    # register HKCU Run key autostart
+python -m ollama_tray --uninstall  # remove HKCU Run key autostart
 ```
 
 **Autostart options**

@@ -31,13 +31,7 @@ param(
 
 $ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot   = Split-Path -Parent $ScriptDir
-$TrayScript = Join-Path $RepoRoot "ollama_tray.py"
 $TaskName   = "OllamaTray"
-
-if (-not (Test-Path $TrayScript)) {
-    Write-Error "ollama_tray.py not found at $TrayScript"
-    exit 1
-}
 
 # ── uninstall ────────────────────────────────────────────────────────────────
 if ($Uninstall) {
@@ -67,7 +61,7 @@ if (-not $NoDeps) {
 
 # ── register autostart ───────────────────────────────────────────────────────
 $PythonPath = (Get-Command $Python -ErrorAction Stop).Source
-$Cmd = "`"$PythonPath`" `"$TrayScript`""
+$Cmd = "`"$PythonPath`" -m ollama_tray"
 
 Write-Host "Registering autostart (HKCU Run / $TaskName)..."
 Set-ItemProperty `
@@ -78,11 +72,11 @@ Set-ItemProperty `
 Write-Host ""
 Write-Host "Installed. Tray icon appears after next logon."
 Write-Host "To start now:"
-Write-Host "  & `"$PythonPath`" `"$TrayScript`""
+Write-Host "  & `"$PythonPath`" -m ollama_tray"
 Write-Host ""
 Write-Host "CLI commands:"
-Write-Host "  python ollama_tray.py --status     # print service status"
-Write-Host "  python ollama_tray.py --start      # start Ollama service  (UAC if needed)"
-Write-Host "  python ollama_tray.py --stop       # stop Ollama service   (UAC if needed)"
-Write-Host "  python ollama_tray.py --restart    # restart Ollama service"
-Write-Host "  python ollama_tray.py --uninstall  # remove autostart"
+Write-Host "  python -m ollama_tray --status     # print service status"
+Write-Host "  python -m ollama_tray --start      # start Ollama service  (UAC if needed)"
+Write-Host "  python -m ollama_tray --stop       # stop Ollama service   (UAC if needed)"
+Write-Host "  python -m ollama_tray --restart    # restart Ollama service"
+Write-Host "  python -m ollama_tray --uninstall  # remove autostart"
