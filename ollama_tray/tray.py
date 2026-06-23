@@ -5,7 +5,7 @@ import webbrowser
 import pystray
 from pystray import MenuItem as item, Menu
 
-from ollama_tray.constants import OLLAMA_URL, STATS_INTERVAL, STATUS_INTERVAL
+import ollama_tray.config as _cfg
 from ollama_tray.dialog import open_resource_dialog
 from ollama_tray.icon import make_icon
 from ollama_tray.stats import _fmt_bytes, current_stats, refresh_stats
@@ -41,7 +41,7 @@ class OllamaTray:
         threading.Thread(target=_do, daemon=True).start()
 
     def _open_browser(self, *_):
-        webbrowser.open(OLLAMA_URL)
+        webbrowser.open(_cfg.OLLAMA_URL)
 
     def _toggle_dialog(self, *_):
         open_resource_dialog()
@@ -50,15 +50,23 @@ class OllamaTray:
         if self._icon:
             self._icon.stop()
 
+    def _on_config_change(self) -> None:
+        from ollama_tray.icon import invalidate_cache
+        invalidate_cache()
+        if self._icon:
+            with self._lock:
+                self._icon.icon  = make_icon(self._status)
+                self._icon.title = f"Ollama — {self._status.capitalize()}"
+
     def _poll(self):
         from ollama_tray.platform import get_status
         while True:
-            time.sleep(STATS_INTERVAL)
+            time.sleep(_cfg.STATS_INTERVAL)
             self._tick += 1
 
             refresh_stats()
 
-            if self._tick % STATUS_INTERVAL == 0:
+            if self._tick % _cfg.STATUS_INTERVAL == 0:
                 new = get_status()
                 with self._lock:
                     if new != self._status:
@@ -97,6 +105,8 @@ class OllamaTray:
             f"Ollama — {self._status.capitalize()}",
             menu=menu,
         )
+        _cfg.on_change(self._on_config_change)
+        _cfg.start_watcher()
         threading.Thread(target=self._poll, daemon=True).start()
         try:
             self._icon.run()

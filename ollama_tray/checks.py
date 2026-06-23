@@ -4,22 +4,25 @@ Startup environment checks for ollama-tray.
 Fatal checks (wrong Python, missing deps, no tray backend) call sys.exit(1)
 after showing a platform-native error dialog or printing to stderr.
 
-Non-fatal checks (Ollama not installed, old version) warn and continue —
-the tray still runs, just with limited functionality.
+Non-fatal checks (Ollama not installed, not running, old version) warn / prompt
+and continue — the tray still runs with limited functionality.
 """
 import json
 import os
 import shutil
 import subprocess
 import sys
+import threading
 import urllib.error
 import urllib.request
 from typing import Callable
 
-from ollama_tray.constants import OLLAMA_URL
+from ollama_tray.config import MIN_OLLAMA as _MIN_OLLAMA, OLLAMA_URL, SERVE_HOST
 
 _MIN_PYTHON = (3, 10)
-_MIN_OLLAMA = (0, 1, 14)
+
+_FONT_UI   = "Segoe UI"   if sys.platform == "win32" else "Noto Sans"
+_FONT_MONO = "Consolas"   if sys.platform == "win32" else "Hack"
 
 
 class StartupError(Exception):
@@ -96,9 +99,10 @@ def check_imports() -> None:
     """Verify all required third-party packages are importable."""
     missing: list[tuple[str, str]] = []
     for pip_name, import_name in [
-        ("pystray", "pystray"),
-        ("Pillow",  "PIL"),
-        ("psutil",  "psutil"),
+        ("pystray",  "pystray"),
+        ("Pillow",   "PIL"),
+        ("psutil",   "psutil"),
+        ("watchdog", "watchdog"),
     ]:
         try:
             __import__(import_name)
@@ -112,7 +116,7 @@ def check_imports() -> None:
             missing.append(("pywin32", "win32service"))
 
     if missing:
-        pkgs = " ".join(p for p, _ in missing)
+        pkgs  = " ".join(p for p, _ in missing)
         names = ", ".join(p for p, _ in missing)
         raise StartupError(
             f"Missing required packages: {names}\n\n"
@@ -150,14 +154,13 @@ def check_pystray_backend() -> None:
         )
 
 
-# ── non-fatal checks ──────────────────────────────────────────────────────────
+# ── ollama binary / download prompt ──────────────────────────────────────────
 
 def _show_download_prompt(download_url: str) -> None:
     """
-    Tkinter dialog shown when Ollama is not found.
-    Offers a Download button (opens browser) and a Continue button.
-    Tray starts either way — user can install Ollama and restart.
-    Only call this after check_tkinter() has confirmed tkinter is available.
+    Tkinter dialog: Ollama binary not found.
+    Download button opens browser. Either way the tray starts.
+    Only call after check_tkinter() has passed.
     """
     import tkinter as tk
     import webbrowser
@@ -168,22 +171,19 @@ def _show_download_prompt(download_url: str) -> None:
     root.configure(bg="#1e1e2e")
     root.attributes("-topmost", True)
 
-    # Centre on screen
-    root.update_idletasks()
     w, h = 420, 210
+    root.update_idletasks()
     x = (root.winfo_screenwidth()  - w) // 2
     y = (root.winfo_screenheight() - h) // 2
     root.geometry(f"{w}x{h}+{x}+{y}")
 
-    # Header bar
     tk.Label(
         root, text="  Ollama Not Found",
         bg="#313244", fg="#cdd6f4",
-        font=("Segoe UI" if sys.platform == "win32" else "Noto Sans", 11, "bold"),
+        font=(_FONT_UI, 11, "bold"),
         anchor="w", padx=8, pady=7,
     ).pack(fill="x")
 
-    # Body
     body = tk.Frame(root, bg="#1e1e2e", padx=20, pady=14)
     body.pack(fill="both", expand=True)
 
@@ -192,15 +192,13 @@ def _show_download_prompt(download_url: str) -> None:
         text=(
             "Ollama is not installed or was not found in PATH.\n\n"
             "Service controls will be unavailable.\n"
-            "You can install Ollama and restart the tray at any time."
+            "Install Ollama and restart the tray at any time."
         ),
         bg="#1e1e2e", fg="#cdd6f4",
-        font=("Segoe UI" if sys.platform == "win32" else "Noto Sans", 10),
-        justify="left", anchor="w",
-        wraplength=380,
+        font=(_FONT_UI, 10),
+        justify="left", anchor="w", wraplength=380,
     ).pack(fill="x")
 
-    # Button row
     btn_frame = tk.Frame(root, bg="#1e1e2e", pady=12)
     btn_frame.pack(fill="x", padx=20)
 
@@ -208,42 +206,38 @@ def _show_download_prompt(download_url: str) -> None:
         webbrowser.open(download_url)
         root.destroy()
 
-    def _continue() -> None:
-        root.destroy()
-
     tk.Button(
         btn_frame, text="Download Ollama",
         command=_download,
         bg="#89b4fa", fg="#1e1e2e",
-        font=("Segoe UI" if sys.platform == "win32" else "Noto Sans", 10, "bold"),
+        font=(_FONT_UI, 10, "bold"),
         relief="flat", padx=14, pady=5, cursor="hand2",
         activebackground="#74c7ec", activeforeground="#1e1e2e",
     ).pack(side="left", padx=(0, 10))
 
     tk.Button(
         btn_frame, text="Continue without Ollama",
-        command=_continue,
+        command=root.destroy,
         bg="#313244", fg="#cdd6f4",
-        font=("Segoe UI" if sys.platform == "win32" else "Noto Sans", 10),
+        font=(_FONT_UI, 10),
         relief="flat", padx=14, pady=5, cursor="hand2",
         activebackground="#45475a", activeforeground="#cdd6f4",
     ).pack(side="left")
 
-    root.protocol("WM_DELETE_WINDOW", _continue)
+    root.protocol("WM_DELETE_WINDOW", root.destroy)
     root.mainloop()
 
 
 def check_ollama_binary(gui: bool = True) -> bool:
     """
-    Prompt to download Ollama if binary not found (GUI mode) or warn to stderr
-    (CLI mode). Returns True if found. Non-fatal either way.
+    Returns True if the Ollama binary is found.
+    In GUI mode shows a download prompt when missing. Non-fatal either way.
     """
     if sys.platform == "win32":
         candidates = [
             os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama.exe"),
             r"C:\Program Files\Ollama\ollama.exe",
         ]
-        found = bool(shutil.which("ollama")) or any(os.path.exists(p) for p in candidates)
         download_url = "https://ollama.com/download/windows"
     else:
         candidates = [
@@ -251,8 +245,9 @@ def check_ollama_binary(gui: bool = True) -> bool:
             "/usr/bin/ollama",
             os.path.expanduser("~/.local/bin/ollama"),
         ]
-        found = bool(shutil.which("ollama")) or any(os.path.exists(p) for p in candidates)
         download_url = "https://ollama.com/install.sh"
+
+    found = bool(shutil.which("ollama")) or any(os.path.exists(p) for p in candidates)
 
     if not found:
         if gui:
@@ -266,6 +261,291 @@ def check_ollama_binary(gui: bool = True) -> bool:
     return found
 
 
+# ── ollama start dialog ───────────────────────────────────────────────────────
+
+def _is_ollama_running() -> bool:
+    """True if the Ollama HTTP server responds at OLLAMA_URL."""
+    try:
+        with urllib.request.urlopen(f"{OLLAMA_URL}/api/version", timeout=2):
+            return True
+    except Exception:
+        return False
+
+
+def _get_ollama_models() -> list[str]:
+    """Return model names from `ollama list`. Empty list on any failure."""
+    try:
+        r = subprocess.run(
+            ["ollama", "list"],
+            capture_output=True, text=True, timeout=5,
+        )
+        lines = r.stdout.strip().splitlines()
+        return [ln.split()[0] for ln in lines[1:] if ln.strip()]
+    except Exception:
+        return []
+
+
+def _launch_ollama(host: str, extra_env_text: str, preload_model: str) -> None:
+    """
+    Start `ollama serve` as a detached subprocess.
+    If preload_model is given, sends a keep-alive load request after 3 s.
+    """
+    env = os.environ.copy()
+    if host:
+        env["OLLAMA_HOST"] = host
+
+    for line in extra_env_text.splitlines():
+        line = line.strip()
+        if "=" in line and not line.startswith("#"):
+            k, _, v = line.partition("=")
+            env[k.strip()] = v.strip()
+
+    kwargs: dict = {"env": env}
+    if sys.platform == "win32":
+        kwargs["creationflags"] = (
+            subprocess.DETACHED_PROCESS
+            | subprocess.CREATE_NEW_PROCESS_GROUP
+            | subprocess.CREATE_NO_WINDOW
+        )
+    else:
+        kwargs["start_new_session"] = True
+
+    subprocess.Popen(["ollama", "serve"], **kwargs)
+
+    if preload_model:
+        # resolve the port from host field so we can call the right endpoint
+        port = host.split(":")[-1] if ":" in host else "11434"
+        api_url = f"http://127.0.0.1:{port}/api/generate"
+
+        def _preload() -> None:
+            import time
+            time.sleep(3)
+            try:
+                payload = json.dumps({"model": preload_model, "keep_alive": -1}).encode()
+                req = urllib.request.Request(
+                    api_url, data=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                urllib.request.urlopen(req, timeout=30)
+            except Exception:
+                pass
+
+        threading.Thread(target=_preload, daemon=True).start()
+
+
+def _show_ollama_start_dialog() -> None:
+    """
+    Tkinter dialog: Ollama binary present but server not running.
+    User can configure host, pick a model to preload, add env vars,
+    then click Start to launch `ollama serve` locally.
+    Only call after check_tkinter() has passed.
+    """
+    import tkinter as tk
+    from tkinter import ttk
+
+    root = tk.Tk()
+    root.title("Start Ollama")
+    root.resizable(False, False)
+    root.configure(bg="#1e1e2e")
+    root.attributes("-topmost", True)
+
+    w, h = 480, 390
+    root.update_idletasks()
+    x = (root.winfo_screenwidth()  - w) // 2
+    y = (root.winfo_screenheight() - h) // 2
+    root.geometry(f"{w}x{h}+{x}+{y}")
+
+    # ── header ────────────────────────────────────────────────────────────────
+    tk.Label(
+        root, text="  Ollama is Not Running",
+        bg="#313244", fg="#cdd6f4",
+        font=(_FONT_UI, 11, "bold"),
+        anchor="w", padx=8, pady=7,
+    ).pack(fill="x")
+
+    tk.Label(
+        root,
+        text="  Configure and start Ollama locally, or continue with limited functionality.",
+        bg="#1e1e2e", fg="#6c7086",
+        font=(_FONT_UI, 9),
+        anchor="w", padx=8, pady=3,
+    ).pack(fill="x")
+
+    body = tk.Frame(root, bg="#1e1e2e", padx=20, pady=10)
+    body.pack(fill="both", expand=True)
+
+    # ── helper: labelled row ──────────────────────────────────────────────────
+    def _label_row(text: str, hint: str = "") -> tk.Frame:
+        f = tk.Frame(body, bg="#1e1e2e")
+        f.pack(fill="x", pady=(6, 0))
+        tk.Label(
+            f, text=text,
+            bg="#1e1e2e", fg="#a6adc8",
+            font=(_FONT_UI, 9, "bold"), anchor="w",
+        ).pack(side="left")
+        if hint:
+            tk.Label(
+                f, text=hint,
+                bg="#1e1e2e", fg="#585b70",
+                font=(_FONT_UI, 8), anchor="w",
+            ).pack(side="left", padx=(6, 0))
+        return f
+
+    # ── host ──────────────────────────────────────────────────────────────────
+    _label_row("Host", "→ OLLAMA_HOST")
+    host_var = tk.StringVar(value=SERVE_HOST)
+    tk.Entry(
+        body, textvariable=host_var,
+        bg="#313244", fg="#cdd6f4", insertbackground="#cdd6f4",
+        relief="flat", font=(_FONT_MONO, 10), width=36,
+    ).pack(fill="x", ipady=4, pady=(3, 0))
+
+    # ── model ─────────────────────────────────────────────────────────────────
+    model_row = _label_row("Model to preload", "  (optional — loads into memory after start)")
+    model_var = tk.StringVar(value="(none)")
+
+    style = ttk.Style()
+    style.theme_use("default")
+    style.configure(
+        "Dark.TCombobox",
+        fieldbackground="#313244",
+        background="#313244",
+        foreground="#cdd6f4",
+        selectbackground="#45475a",
+        selectforeground="#cdd6f4",
+    )
+
+    combo = ttk.Combobox(
+        body, textvariable=model_var,
+        style="Dark.TCombobox",
+        state="readonly", font=(_FONT_MONO, 10),
+    )
+    combo.pack(fill="x", ipady=3, pady=(3, 0))
+
+    status_var = tk.StringVar(value="")
+    status_lbl = tk.Label(
+        body, textvariable=status_var,
+        bg="#1e1e2e", fg="#6c7086",
+        font=(_FONT_UI, 8), anchor="w",
+    )
+    status_lbl.pack(fill="x")
+
+    def _refresh_models() -> None:
+        status_var.set("Fetching models…")
+        root.update_idletasks()
+
+        def _fetch() -> None:
+            models = _get_ollama_models()
+            values = ["(none)"] + models
+            combo["values"] = values
+            if not combo.get() or combo.get() not in values:
+                combo.set("(none)")
+            if models:
+                status_var.set(f"{len(models)} model(s) found")
+            else:
+                status_var.set("No models installed — run 'ollama pull <model>'")
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    ref_btn = tk.Button(
+        model_row, text="↻ Refresh",
+        command=_refresh_models,
+        bg="#45475a", fg="#cdd6f4",
+        relief="flat", font=(_FONT_UI, 8), padx=6, pady=1,
+        cursor="hand2",
+        activebackground="#585b70", activeforeground="#cdd6f4",
+    )
+    ref_btn.pack(side="right")
+
+    _refresh_models()
+
+    # ── extra env vars ────────────────────────────────────────────────────────
+    _label_row("Environment variables", "  one KEY=VALUE per line")
+    env_text = tk.Text(
+        body,
+        height=4,
+        bg="#313244", fg="#cdd6f4", insertbackground="#cdd6f4",
+        relief="flat", font=(_FONT_MONO, 9),
+        wrap="none",
+    )
+    env_text.pack(fill="x", ipady=5, pady=(3, 0))
+
+    examples = [
+        "# OLLAMA_NUM_PARALLEL=4",
+        "# OLLAMA_MAX_LOADED_MODELS=2",
+        "# OLLAMA_DEBUG=1",
+        "# OLLAMA_ORIGINS=*",
+    ]
+    env_text.insert("1.0", "\n".join(examples))
+    env_text.configure(fg="#45475a")  # dim placeholder
+
+    def _clear_placeholder(event: object) -> None:
+        if env_text.get("1.0", "end").strip() == "\n".join(examples):
+            env_text.delete("1.0", "end")
+            env_text.configure(fg="#cdd6f4")
+
+    env_text.bind("<FocusIn>", _clear_placeholder)
+
+    # ── buttons ───────────────────────────────────────────────────────────────
+    btn_frame = tk.Frame(root, bg="#181825", pady=12, padx=20)
+    btn_frame.pack(fill="x")
+
+    def _start() -> None:
+        host  = host_var.get().strip() or "127.0.0.1:11434"
+        model = model_var.get().strip()
+        if model == "(none)":
+            model = ""
+        raw_env = env_text.get("1.0", "end")
+        if raw_env.strip() == "\n".join(examples):
+            raw_env = ""
+        root.destroy()
+        _launch_ollama(host, raw_env, model)
+
+    def _skip() -> None:
+        root.destroy()
+
+    tk.Button(
+        btn_frame, text="▶  Start Ollama",
+        command=_start,
+        bg="#a6e3a1", fg="#1e1e2e",
+        font=(_FONT_UI, 10, "bold"),
+        relief="flat", padx=16, pady=6, cursor="hand2",
+        activebackground="#94e2d5", activeforeground="#1e1e2e",
+    ).pack(side="left", padx=(0, 10))
+
+    tk.Button(
+        btn_frame, text="Continue without starting",
+        command=_skip,
+        bg="#313244", fg="#cdd6f4",
+        font=(_FONT_UI, 10),
+        relief="flat", padx=14, pady=6, cursor="hand2",
+        activebackground="#45475a", activeforeground="#cdd6f4",
+    ).pack(side="left")
+
+    root.protocol("WM_DELETE_WINDOW", _skip)
+    root.mainloop()
+
+
+def check_ollama_running(gui: bool = True) -> None:
+    """
+    Show start dialog (GUI) or warn to stderr (CLI) when the Ollama server is
+    not responding. Non-fatal — tray starts regardless.
+    Only relevant when the Ollama binary was already confirmed present.
+    """
+    if _is_ollama_running():
+        return
+    if gui:
+        _show_ollama_start_dialog()
+    else:
+        print(
+            f"Warning: Ollama server not reachable at {OLLAMA_URL}.\n"
+            "Start with:  ollama serve",
+            file=sys.stderr,
+        )
+
+
+# ── version check ─────────────────────────────────────────────────────────────
+
 def check_ollama_version() -> None:
     """
     Probe the running Ollama API for its version string.
@@ -275,7 +555,7 @@ def check_ollama_version() -> None:
         with urllib.request.urlopen(f"{OLLAMA_URL}/api/version", timeout=2) as resp:
             data = json.loads(resp.read())
     except (urllib.error.URLError, OSError, json.JSONDecodeError, ValueError):
-        return  # not running — expected at startup
+        return
 
     version_str = data.get("version", "")
     try:
@@ -321,6 +601,8 @@ def run_startup_checks(gui: bool = True) -> None:
                 print(f"Error: {msg}", file=sys.stderr)
             sys.exit(1)
 
-    # Non-fatal: prompt/warn and continue
-    check_ollama_binary(gui=gui)
+    # Non-fatal: prompt / warn and continue
+    ollama_found = check_ollama_binary(gui=gui)
+    if ollama_found:
+        check_ollama_running(gui=gui)
     check_ollama_version()

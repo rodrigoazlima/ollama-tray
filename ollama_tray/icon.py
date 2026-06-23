@@ -1,6 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 
-from ollama_tray.constants import ICON_SIZE, STATUS_COLOR
+import ollama_tray.config as _cfg
 
 _base: Image.Image | None = None
 _icon_path: str | None = None
@@ -12,18 +12,24 @@ def set_icon_path(path: str | None) -> None:
     _base = None
 
 
+def invalidate_cache() -> None:
+    global _base
+    _base = None
+
+
 def _base_image() -> Image.Image:
+    sz = _cfg.ICON_SIZE
     if _icon_path:
         try:
             img = Image.open(_icon_path).convert("RGBA")
-            return img.resize((ICON_SIZE, ICON_SIZE), Image.LANCZOS)
+            return img.resize((sz, sz), Image.LANCZOS)
         except (OSError, UnidentifiedImageError, ValueError):
             # Icon file corrupt or unreadable — fall through to generated icon
             pass
 
-    img = Image.new("RGBA", (ICON_SIZE, ICON_SIZE), (0, 0, 0, 0))
+    img = Image.new("RGBA", (sz, sz), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    draw.ellipse([2, 2, ICON_SIZE - 2, ICON_SIZE - 2], fill=(30, 30, 30, 230))
+    draw.ellipse([2, 2, sz - 2, sz - 2], fill=(30, 30, 30, 230))
     font: ImageFont.ImageFont | ImageFont.FreeTypeFont = ImageFont.load_default()
     for name in ("arial.ttf", "DejaVuSans-Bold.ttf"):
         try:
@@ -42,8 +48,9 @@ def make_icon(status: str) -> Image.Image:
     img = _base.copy()
     draw = ImageDraw.Draw(img)
     r = 10
-    x0, y0 = ICON_SIZE - r * 2 - 2, ICON_SIZE - r * 2 - 2
-    color = STATUS_COLOR.get(status, STATUS_COLOR["unknown"])
+    sz = _cfg.ICON_SIZE
+    x0, y0 = sz - r * 2 - 2, sz - r * 2 - 2
+    color = _cfg.STATUS_COLOR.get(status, _cfg.STATUS_COLOR["unknown"])
     draw.ellipse([x0 - 1, y0 - 1, x0 + r * 2 + 1, y0 + r * 2 + 1], fill=(0, 0, 0, 180))
     draw.ellipse([x0, y0, x0 + r * 2, y0 + r * 2], fill=color + (255,))
     return img

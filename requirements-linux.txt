@@ -1,6 +1,7 @@
 pystray>=0.19
 Pillow>=10.0
 psutil>=5.9
+watchdog>=4.0
 # System packages (not pip):
 #   python3-tk
 #   gir1.2-ayatanaappindicator3-0.1  (Debian/Ubuntu)

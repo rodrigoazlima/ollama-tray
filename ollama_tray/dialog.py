@@ -3,7 +3,7 @@ import threading
 import time
 from datetime import datetime
 
-from ollama_tray.constants import TOGGLE_DEBOUNCE_S
+import ollama_tray.config as _cfg
 from ollama_tray.stats import _fmt_bytes, refresh_stats
 
 _dialog_lock      = threading.Lock()
@@ -30,7 +30,7 @@ def open_resource_dialog() -> None:
 
     with _dialog_lock:
         now = time.monotonic()
-        if now - _last_toggle_time < TOGGLE_DEBOUNCE_S:
+        if now - _last_toggle_time < _cfg.TOGGLE_DEBOUNCE_S:
             return
         _last_toggle_time = now
 

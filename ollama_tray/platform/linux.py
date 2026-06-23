@@ -6,11 +6,11 @@ from pathlib import Path
 
 import psutil
 
+from ollama_tray.config import AUTOSTART_NAME
 from ollama_tray.icon import set_icon_path
 
 os.environ.setdefault("PYSTRAY_BACKEND", "appindicator")
 
-AUTOSTART_NAME = "ollama-tray"
 _AUTOSTART_DIR = Path.home() / ".config" / "autostart"
 _DESKTOP_FILE  = _AUTOSTART_DIR / f"{AUTOSTART_NAME}.desktop"
 

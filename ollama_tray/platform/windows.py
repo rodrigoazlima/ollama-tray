@@ -7,10 +7,8 @@ import pywintypes
 import win32service
 import winreg
 
+from ollama_tray.config import SERVICE_NAME, TASK_NAME
 from ollama_tray.icon import set_icon_path
-
-SERVICE_NAME = "Ollama"
-TASK_NAME    = "OllamaTray"
 
 _OLLAMA_ICO = os.path.join(
     os.environ.get("LOCALAPPDATA", ""),
