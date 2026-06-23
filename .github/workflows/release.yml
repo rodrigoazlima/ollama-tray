@@ -120,6 +120,7 @@ jobs:
           name: "ollama-tray ${{ github.ref_name }}"
           prerelease: ${{ contains(github.ref_name, '-pre') || contains(github.ref_name, '-rc') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-release-candidate') }}
           generate_release_notes: true
+          make_latest: false
           files: |
             ollama-tray-${{ github.ref_name }}-windows-x64.exe
             setup-${{ github.ref_name }}-windows-x64.exe
