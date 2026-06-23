@@ -101,6 +101,8 @@ jobs:
   release:
     needs: [build-windows, build-linux, build-wheel]
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -115,14 +117,26 @@ jobs:
           chmod +x "ollama-tray-${TAG}-linux-x64"
           cp artifacts/python-wheel/*.whl .
 
-      - uses: softprops/action-gh-release@v2
-        with:
-          name: "ollama-tray ${{ github.ref_name }}"
-          prerelease: ${{ contains(github.ref_name, '-pre') || contains(github.ref_name, '-rc') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-release-candidate') }}
-          generate_release_notes: true
-          make_latest: false
-          files: |
-            ollama-tray-${{ github.ref_name }}-windows-x64.exe
-            setup-${{ github.ref_name }}-windows-x64.exe
-            ollama-tray-${{ github.ref_name }}-linux-x64
+      - name: Publish release
+        run: |
+          TAG="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
+
+          # Determine prerelease flag
+          PRERELEASE_FLAG=""
+          case "$TAG" in
+            *-pre*|*-rc*|*-alpha*|*-beta*|*-release-candidate*) PRERELEASE_FLAG="--prerelease" ;;
+          esac
+
+          # Delete any existing release for this tag (published or draft) to avoid conflicts
+          gh release delete "$TAG" --repo "$REPO" --yes 2>/dev/null || true
+
+          gh release create "$TAG" \
+            --repo "$REPO" \
+            --title "ollama-tray $TAG" \
+            --generate-notes \
+            $PRERELEASE_FLAG \
+            "ollama-tray-${TAG}-windows-x64.exe" \
+            "setup-${TAG}-windows-x64.exe" \
+            "ollama-tray-${TAG}-linux-x64" \
             *.whl
