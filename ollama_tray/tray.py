@@ -7,6 +7,7 @@ from pystray import MenuItem as item, Menu
 
 import ollama_tray.config as _cfg
 from ollama_tray.dialog import open_resource_dialog
+from ollama_tray.settings_dialog import open_settings_dialog
 from ollama_tray.icon import make_icon
 from ollama_tray.stats import _fmt_bytes, current_stats, refresh_stats
 
@@ -50,6 +51,9 @@ class OllamaTray:
         if self._icon:
             self._icon.stop()
 
+    def _open_settings(self, *_):
+        open_settings_dialog()
+
     def _set_theme(self, name: str, *_) -> None:
         _cfg.set_theme(name)
 
@@ -86,10 +90,12 @@ class OllamaTray:
 
     def run(self):
         import sys
-        from ollama_tray.platform import get_status, init as platform_init
+        from ollama_tray.platform import get_status, init as platform_init, service_label
         platform_init()
         self._status = get_status()
         refresh_stats()
+
+        lbl = service_label()
 
         theme_menu = Menu(
             *(item(name.capitalize(), lambda *_, n=name: self._set_theme(n))
@@ -99,12 +105,13 @@ class OllamaTray:
         menu = Menu(
             item(self._stats_label, self._toggle_dialog, default=True),
             Menu.SEPARATOR,
-            item("Start Service",   self._start),
-            item("Stop Service",    self._stop),
-            item("Restart Service", self._restart),
+            item(f"Start {lbl}",   self._start),
+            item(f"Stop {lbl}",    self._stop),
+            item(f"Restart {lbl}", self._restart),
             Menu.SEPARATOR,
             item("Open in Browser", self._open_browser),
             item("Theme",           theme_menu),
+            item("Settings…",       self._open_settings),
             Menu.SEPARATOR,
             item("Exit",            self._exit),
         )

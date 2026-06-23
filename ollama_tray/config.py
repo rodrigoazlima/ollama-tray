@@ -93,6 +93,97 @@ def _ver(
         return default
 
 
+_DEFAULT_CONFIG_TEXT = """\
+# ollama-tray configuration
+# Edit and restart the tray to apply changes.
+# All keys are optional — missing keys fall back to the defaults shown here.
+
+# ── Server ────────────────────────────────────────────────────────────────────
+
+# Ollama HTTP API base URL
+ollama_url = http://localhost:11434
+
+# Default host passed to OLLAMA_HOST when starting Ollama from the tray dialog
+ollama_serve_host = 127.0.0.1:11434
+
+# Minimum Ollama version; warn on startup if the running version is below this
+min_ollama_version = 0.1.14
+
+# ── Tray polling ──────────────────────────────────────────────────────────────
+
+# Seconds between CPU/RAM stat refreshes
+stats_interval = 1
+
+# Number of stat ticks between service-status re-checks  (status_interval × stats_interval = s)
+status_interval = 5
+
+# Minimum seconds between resource-monitor dialog open/close toggles
+toggle_debounce = 0.6
+
+# ── Icon ──────────────────────────────────────────────────────────────────────
+
+# Tray icon canvas size in pixels
+icon_size = 64
+
+# ── Windows service ───────────────────────────────────────────────────────────
+
+# Name of the Windows service managed by the tray
+service_name = Ollama
+
+# Registry key name used for autostart (HKCU\\...\\Run)
+task_name = OllamaTray
+
+# ── Linux autostart ───────────────────────────────────────────────────────────
+
+# Stem of the XDG .desktop autostart file (~/.config/autostart/<name>.desktop)
+autostart_name = ollama-tray
+
+# ── Status indicator colors (R,G,B) ──────────────────────────────────────────
+
+color_running  = 72,199,116
+color_stopped  = 220,53,69
+color_starting = 255,193,7
+color_stopping = 255,193,7
+color_unknown  = 255,193,7
+
+# ── Ollama GPU / performance ──────────────────────────────────────────────────
+# These are passed as environment variables when starting Ollama from the tray.
+# Leave a value blank to let Ollama use its own default.
+
+# Number of GPU layers to offload (blank = Ollama auto-detects; set to 0 for CPU-only)
+ollama_num_gpu =
+
+# KV cache quantization: f16 (lossless) | q8_0 (near-lossless) | q4_0 (4× smaller)
+ollama_kv_cache_type = f16
+
+# Enable Flash Attention for long-context inference: 0 | 1
+ollama_flash_attention = 0
+
+# Parallel inference requests handled simultaneously
+ollama_num_parallel = 1
+
+# Models kept loaded in VRAM simultaneously
+ollama_max_loaded_models = 1
+
+# ── Ollama paths ──────────────────────────────────────────────────────────────
+
+# Override Ollama model storage directory (blank = Ollama default)
+ollama_models_dir =
+
+# ── AMD ROCm ──────────────────────────────────────────────────────────────────
+# AMD-specific tuning — leave blank on NVIDIA/Intel/Apple hardware.
+
+# HSA_ENABLE_SDMA: 0 = disable SDMA engine on RDNA3 (+5-15% throughput)
+# Set to 1 to restore AMD default behaviour; leave blank on non-AMD systems
+hsa_enable_sdma =
+
+# ── Window / UI theme ─────────────────────────────────────────────────────────
+
+# Theme for tkinter dialogs: dark | light | black
+# Change here or via the Theme submenu in the tray icon.
+ui_theme = dark
+"""
+
 _THEMES: dict[str, dict[str, str]] = {
     "dark": {
         "bg":        "#1e1e2e",
@@ -170,14 +261,39 @@ def _apply(cp: configparser.ConfigParser) -> None:
     theme_name             = _s(cp, "ui_theme", "dark")
     g["UI_THEME"]          = theme_name
     g["UI_COLOR"]          = dict(_THEMES.get(theme_name, _THEMES["dark"]))
+    # ── Ollama GPU / performance env vars ──────────────────────────────────
+    g["OLLAMA_MODELS_DIR"]        = _s(cp, "ollama_models_dir",        "")
+    g["OLLAMA_NUM_GPU"]           = _s(cp, "ollama_num_gpu",            "")
+    g["OLLAMA_FLASH_ATTENTION"]   = _s(cp, "ollama_flash_attention",    "0")
+    g["OLLAMA_KV_CACHE_TYPE"]     = _s(cp, "ollama_kv_cache_type",      "f16")
+    g["OLLAMA_NUM_PARALLEL"]      = _i(cp, "ollama_num_parallel",       1)
+    g["OLLAMA_MAX_LOADED_MODELS"] = _i(cp, "ollama_max_loaded_models",  1)
+    g["HSA_ENABLE_SDMA"]          = _s(cp, "hsa_enable_sdma",           "")
 
 
 # ── initial load ──────────────────────────────────────────────────────────────
+
+def _init_default_config() -> Path | None:
+    """Write default config.properties to the user config dir; return its path."""
+    if sys.platform == "win32":
+        dest = Path(os.environ.get("APPDATA", "~")) / "OllamaTray" / "config.properties"
+    else:
+        dest = Path.home() / ".config" / "ollama-tray" / "config.properties"
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(_DEFAULT_CONFIG_TEXT, encoding="utf-8")
+        return dest
+    except Exception:
+        return None
+
 
 _config_path: Path | None = _find_config()
 _mtime:        float       = 0.0
 
 _apply(_parse(""))  # populate defaults
+
+if _config_path is None:
+    _config_path = _init_default_config()
 
 if _config_path:
     try:

@@ -4,6 +4,7 @@ if sys.platform == "win32":
     from ollama_tray.platform.windows import (
         init,
         get_status,
+        service_label,
         service_action,
         cli_start,
         cli_stop,
@@ -16,6 +17,7 @@ else:
     from ollama_tray.platform.linux import (
         init,
         get_status,
+        service_label,
         service_action,
         cli_start,
         cli_stop,

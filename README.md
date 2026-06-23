@@ -47,6 +47,7 @@
       </ul>
     </li>
     <li><a href="#usage">Usage</a></li>
+    <li><a href="#configuration">Configuration</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
@@ -175,6 +176,34 @@ python ollama_tray.py --uninstall  # remove HKCU Run key autostart
 .\windows\install.ps1 -Python "python3"    # specify Python executable
 .\windows\install.ps1 -Uninstall           # remove autostart
 ```
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+<!-- CONFIGURATION -->
+## Configuration
+
+`config.properties` is created automatically on first run. Location:
+
+| Platform | Path |
+|----------|------|
+| Windows  | `%APPDATA%\OllamaTray\config.properties` |
+| Linux    | `~/.config/ollama-tray/config.properties` |
+
+Edit the file and restart the tray to apply changes. All keys are optional — omit any key to use the default.
+
+**Key settings**
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `ollama_url` | `http://localhost:11434` | Ollama HTTP API base URL |
+| `ui_theme` | `dark` | Tray dialog theme: `dark` \| `light` \| `black` |
+| `stats_interval` | `1` | Seconds between CPU/RAM stat refreshes |
+| `ollama_num_gpu` | *(blank)* | GPU layers to offload — blank = Ollama auto-detects; `0` = CPU-only |
+| `ollama_kv_cache_type` | `f16` | KV cache precision: `f16` \| `q8_0` \| `q4_0` |
+| `ollama_flash_attention` | `0` | Flash Attention for long-context: `0` \| `1` |
+| `ollama_num_parallel` | `1` | Concurrent inference requests |
+| `ollama_max_loaded_models` | `1` | Models kept in VRAM simultaneously |
+| `hsa_enable_sdma` | *(blank)* | AMD RDNA3 only — set to `0` to disable SDMA (+5–15% throughput) |
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

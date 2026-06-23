@@ -2,11 +2,13 @@ import os
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import psutil
 
-from ollama_tray.config import AUTOSTART_NAME
+from ollama_tray.config import AUTOSTART_NAME, OLLAMA_URL
 from ollama_tray.icon import set_icon_path
 
 os.environ.setdefault("PYSTRAY_BACKEND", "appindicator")
@@ -14,7 +16,7 @@ os.environ.setdefault("PYSTRAY_BACKEND", "appindicator")
 _AUTOSTART_DIR = Path.home() / ".config" / "autostart"
 _DESKTOP_FILE  = _AUTOSTART_DIR / f"{AUTOSTART_NAME}.desktop"
 
-_SERVICE_MODE: str | None = None
+_SERVICE_MODE: str | None = None   # "system" | "user" | None
 
 
 def _find_ollama_icon() -> str | None:
@@ -42,6 +44,21 @@ def _detect_service_mode() -> str | None:
     return None
 
 
+def _http_ping() -> bool:
+    try:
+        with urllib.request.urlopen(f"{OLLAMA_URL}/api/version", timeout=2):
+            return True
+    except Exception:
+        return False
+
+
+def _process_running() -> bool:
+    return any(
+        "ollama" in (p.info.get("name") or "").lower()
+        for p in psutil.process_iter(["name"])
+    )
+
+
 def init() -> None:
     global _SERVICE_MODE
     if _SERVICE_MODE is None:
@@ -59,23 +76,32 @@ def _ctl(*args, timeout: int = 10) -> subprocess.CompletedProcess:
     )
 
 
+_SYSTEMD_STATE_MAP = {
+    "active":       "running",
+    "inactive":     "stopped",
+    "activating":   "starting",
+    "deactivating": "stopping",
+    "reloading":    "starting",
+    "failed":       "stopped",
+}
+
+
 def get_status() -> str:
-    if _SERVICE_MODE is None:
-        procs = [p for p in psutil.process_iter(["name"])
-                 if "ollama" in (p.info.get("name") or "").lower()]
-        return "running" if procs else "stopped"
-    try:
-        r = _ctl("is-active", "ollama")
-        state = r.stdout.strip()
-        return {
-            "active":       "running",
-            "inactive":     "stopped",
-            "activating":   "starting",
-            "deactivating": "stopping",
-            "failed":       "stopped",
-        }.get(state, "unknown")
-    except Exception:
-        return "unknown"
+    if _SERVICE_MODE is not None:
+        try:
+            r = _ctl("is-active", "ollama")
+            return _SYSTEMD_STATE_MAP.get(r.stdout.strip(), "unknown")
+        except Exception:
+            return "unknown"
+    # No systemd unit: HTTP ping, then process scan
+    if _http_ping():
+        return "running"
+    return "running" if _process_running() else "stopped"
+
+
+def service_label() -> str:
+    """'Service' when a systemd unit is detected; 'Ollama' otherwise."""
+    return "Service" if _SERVICE_MODE is not None else "Ollama"
 
 
 def _is_root() -> bool:
@@ -103,14 +129,66 @@ def _svc_stop() -> None:
     _ctl("stop", "ollama", timeout=30)
 
 
-def service_action(action: str) -> None:
-    if _SERVICE_MODE is None:
+def _ollama_env() -> dict[str, str]:
+    """Build environment dict for `ollama serve` from config settings."""
+    from ollama_tray.config import (
+        SERVE_HOST, OLLAMA_MODELS_DIR, OLLAMA_NUM_GPU, OLLAMA_FLASH_ATTENTION,
+        OLLAMA_KV_CACHE_TYPE, OLLAMA_NUM_PARALLEL, OLLAMA_MAX_LOADED_MODELS,
+        HSA_ENABLE_SDMA,
+    )
+    env = os.environ.copy()
+    if SERVE_HOST:
+        env["OLLAMA_HOST"] = SERVE_HOST
+    if OLLAMA_MODELS_DIR:
+        env["OLLAMA_MODELS"] = OLLAMA_MODELS_DIR
+    if OLLAMA_NUM_GPU:
+        env["OLLAMA_NUM_GPU"] = OLLAMA_NUM_GPU
+    if OLLAMA_FLASH_ATTENTION == "1":
+        env["OLLAMA_FLASH_ATTENTION"] = "1"
+    if OLLAMA_KV_CACHE_TYPE and OLLAMA_KV_CACHE_TYPE != "f16":
+        env["OLLAMA_KV_CACHE_TYPE"] = OLLAMA_KV_CACHE_TYPE
+    if OLLAMA_NUM_PARALLEL > 1:
+        env["OLLAMA_NUM_PARALLEL"] = str(OLLAMA_NUM_PARALLEL)
+    if OLLAMA_MAX_LOADED_MODELS > 1:
+        env["OLLAMA_MAX_LOADED_MODELS"] = str(OLLAMA_MAX_LOADED_MODELS)
+    if HSA_ENABLE_SDMA:
+        env["HSA_ENABLE_SDMA"] = HSA_ENABLE_SDMA
+    return env
+
+
+def _start_process() -> None:
+    try:
+        subprocess.Popen(
+            ["ollama", "serve"],
+            env=_ollama_env(),
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
         from ollama_tray.checks import _show_warning
         _show_warning(
-            "ollama-tray: no service found",
-            "No Ollama systemd unit found.\n"
-            "Install Ollama: curl -fsSL https://ollama.com/install.sh | sh",
+            "ollama-tray: Ollama not found",
+            "Ollama binary not found in PATH.\n"
+            "Install: curl -fsSL https://ollama.com/install.sh | sh",
         )
+
+
+def _stop_process() -> None:
+    for p in psutil.process_iter(["name", "pid"]):
+        if "ollama" in (p.info.get("name") or "").lower():
+            try:
+                p.terminate()
+            except psutil.NoSuchProcess:
+                pass
+
+
+def service_action(action: str) -> None:
+    if _SERVICE_MODE is None:
+        if action == "start":
+            _start_process()
+        elif action == "stop":
+            _stop_process()
         return
     needs_root = _SERVICE_MODE == "system" and not _is_root()
     if needs_root:
@@ -129,34 +207,40 @@ def service_action(action: str) -> None:
         elif action == "stop":
             _svc_stop()
     except subprocess.TimeoutExpired:
-        pass  # systemctl timed out — transient, ignore in tray context
+        pass
     except Exception:
         pass
 
 
 def cli_start() -> int:
     if _SERVICE_MODE is None:
-        print("No systemd ollama unit found. Start ollama manually.")
-        return 1
+        try:
+            _start_process()
+            print("Ollama started (process mode).")
+            return 0
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
     try:
         _svc_start()
         print("Ollama service started.")
         return 0
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error: {e}", file=sys.stderr)
         return 1
 
 
 def cli_stop() -> int:
     if _SERVICE_MODE is None:
-        print("No systemd ollama unit found.")
-        return 1
+        _stop_process()
+        print("Ollama processes terminated.")
+        return 0
     try:
         _svc_stop()
         print("Ollama service stopped.")
         return 0
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error: {e}", file=sys.stderr)
         return 1
 
 
