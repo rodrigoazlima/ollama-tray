@@ -1,0 +1,43 @@
+from PIL import Image, ImageDraw, ImageFont
+
+from ollama_tray.constants import ICON_SIZE, STATUS_COLOR
+
+_base: Image.Image | None = None
+_icon_path: str | None = None
+
+
+def set_icon_path(path: str | None) -> None:
+    global _icon_path, _base
+    _icon_path = path
+    _base = None
+
+
+def _base_image() -> Image.Image:
+    if _icon_path:
+        img = Image.open(_icon_path).convert("RGBA")
+        return img.resize((ICON_SIZE, ICON_SIZE), Image.LANCZOS)
+    img = Image.new("RGBA", (ICON_SIZE, ICON_SIZE), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.ellipse([2, 2, ICON_SIZE - 2, ICON_SIZE - 2], fill=(30, 30, 30, 230))
+    for name in ("arial.ttf", "DejaVuSans-Bold.ttf"):
+        try:
+            font = ImageFont.truetype(name, 30)
+            break
+        except Exception:
+            font = ImageFont.load_default()
+    draw.text((18, 14), "O", fill=(200, 200, 200), font=font)
+    return img
+
+
+def make_icon(status: str) -> Image.Image:
+    global _base
+    if _base is None:
+        _base = _base_image()
+    img = _base.copy()
+    draw = ImageDraw.Draw(img)
+    r = 10
+    x0, y0 = ICON_SIZE - r * 2 - 2, ICON_SIZE - r * 2 - 2
+    color = STATUS_COLOR.get(status, STATUS_COLOR["unknown"])
+    draw.ellipse([x0 - 1, y0 - 1, x0 + r * 2 + 1, y0 + r * 2 + 1], fill=(0, 0, 0, 180))
+    draw.ellipse([x0, y0, x0 + r * 2, y0 + r * 2], fill=color + (255,))
+    return img

@@ -22,5 +22,6 @@ ollama-tray = "ollama_tray:main"
 [project.urls]
 Repository = "https://github.com/rodrigoazlima/ollama-tray"
 
-[tool.setuptools]
-py-modules = ["ollama_tray"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ollama_tray*"]
