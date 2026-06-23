@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 
 import ollama_tray.config as _cfg
-from ollama_tray.stats import _fmt_bytes, refresh_stats
+from ollama_tray.stats import _fmt_bytes, fmt_expires, refresh_stats, start_ps_poller
 
 _dialog_lock      = threading.Lock()
 _dialog_open      = False
@@ -64,6 +64,9 @@ def _run_dialog() -> None:
             global _dialog_root
             _dialog_root = root
 
+        import ollama_tray.config as _cfg_live
+        start_ps_poller(_cfg_live.OLLAMA_URL)
+
         root.title("Ollama Resource Monitor")
         root.resizable(False, False)
         root.configure(bg=c["bg"])
@@ -98,7 +101,7 @@ def _run_dialog() -> None:
             bg=c["bg"], fg=c["fg"],
             insertbackground=c["fg"],
             relief="flat", bd=0,
-            width=52, height=14,
+            width=58, height=22,
             state="disabled",
         )
         txt.pack(fill="both", expand=True)
@@ -151,6 +154,8 @@ def _run_dialog() -> None:
 
                 txt.insert("end", "\n  " + sep, "sep")
 
+                vram_ollama = sum(m.get("size_vram", 0) for m in s.models)
+
                 rows = [
                     ("CPU (total)", f"{s.cpu_pct:.1f}%",      _cpu_tag(s.cpu_pct)),
                     ("RAM  RSS",    _fmt_bytes(s.mem_rss),     _mem_tag(s.mem_rss / 1024 ** 2)),
@@ -161,10 +166,40 @@ def _run_dialog() -> None:
                 ]
                 if s.handles:
                     rows.insert(4, ("Handles", str(s.handles), "dim"))
+                if vram_ollama:
+                    rows.append(("VRAM (models)", _fmt_bytes(vram_ollama), "good"))
+                if s.vram_nvml:
+                    used, total = s.vram_nvml
+                    rows.append(("VRAM (GPU)",
+                                 f"{_fmt_bytes(used)} / {_fmt_bytes(total)}", "good"))
 
                 for label, val, tag in rows:
                     txt.insert("end", f"  {label:<16}", "dim")
                     txt.insert("end", f"  {val}\n", tag)
+
+                # ── loaded models ──────────────────────────────────────────
+                txt.insert("end", "\n  " + sep, "sep")
+                txt.insert("end", "  LOADED MODELS\n", "header")
+                txt.insert("end", "  " + sep, "sep")
+
+                if not s.models:
+                    txt.insert("end", "  (none)\n", "dim")
+                else:
+                    for m in s.models:
+                        name      = m.get("name", "?")
+                        size_vram = m.get("size_vram", 0)
+                        size_tot  = m.get("size", 0)
+                        exp_str   = fmt_expires(m.get("expires_at", ""))
+
+                        display = name if len(name) <= 46 else name[:45] + "…"
+                        txt.insert("end", f"  {display}\n", "good")
+
+                        vram_str = _fmt_bytes(size_vram) if size_vram else "CPU only"
+                        ram_str  = _fmt_bytes(size_tot - size_vram) if size_tot > size_vram else "—"
+                        detail   = f"    VRAM {vram_str}   RAM {ram_str}"
+                        if exp_str:
+                            detail += f"   exp {exp_str}"
+                        txt.insert("end", detail + "\n", "dim")
 
             txt.configure(state="disabled")
             footer.configure(
