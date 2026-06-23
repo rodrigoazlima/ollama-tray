@@ -1,80 +1,59 @@
 """
-setup.exe — GUI installer for ollama-tray.
-Finds the system Python, installs dependencies, registers autostart, launches tray.
+setup.exe — self-contained installer for ollama-tray.
+Copies bundled ollama-tray.exe to AppData, registers autostart, and launches it.
+No Python installation required on the target machine.
 """
 import os
+import shutil
 import subprocess
 import sys
+import time
 import winreg
 from pathlib import Path
 
-_TASK_NAME = "OllamaTray"
+_INSTALL_DIR = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "OllamaTray"
+_EXE_NAME    = "ollama-tray.exe"
+_TASK_NAME   = "OllamaTray"
 
-def _requirements_path() -> Path | None:
-    # When frozen, PyInstaller extracts datas into sys._MEIPASS — check there first.
+
+def _bundled_tray_exe() -> Path | None:
     if getattr(sys, "frozen", False):
-        bundled = Path(sys._MEIPASS) / "requirements.txt"
-        if bundled.exists():
-            return bundled
-    # Source layout: repo root is two levels above windows/setup_installer.py
-    for candidate in [
-        Path(__file__).parent.parent,
-        Path(sys.executable).parent,
-        Path(sys.executable).parent.parent,
-    ]:
-        p = candidate / "requirements.txt"
+        p = Path(sys._MEIPASS) / _EXE_NAME
         if p.exists():
             return p
+    # Dev/test fallback: look in dist/ relative to repo root
+    dev = Path(__file__).resolve().parent.parent / "dist" / _EXE_NAME
+    if dev.exists():
+        return dev
     return None
 
 
-def _find_python() -> str | None:
-    for name in ("python", "python3", "py"):
-        try:
-            r = subprocess.run(
-                [name, "-c", "import sys; print(sys.executable)"],
-                capture_output=True, text=True, timeout=5,
-            )
-            if r.returncode == 0:
-                path = r.stdout.strip()
-                if path and Path(path).exists():
-                    return path
-        except Exception:
-            continue
-    return None
+def _install(src: Path) -> Path:
+    _INSTALL_DIR.mkdir(parents=True, exist_ok=True)
+    dst = _INSTALL_DIR / _EXE_NAME
+    if dst.exists():
+        subprocess.run(["taskkill", "/F", "/IM", _EXE_NAME], capture_output=True)
+        time.sleep(0.5)
+    shutil.copy2(src, dst)
+    return dst
 
 
-def _install_deps(python: str, req: Path) -> tuple[bool, str]:
-    r = subprocess.run(
-        [python, "-m", "pip", "install", "-r", str(req), "--quiet"],
-        capture_output=True, text=True,
-    )
-    return r.returncode == 0, (r.stderr or r.stdout).strip()
-
-
-def _register_autostart(python: str) -> None:
-    cmd = f'"{python}" -m ollama_tray'
+def _register_autostart(exe: Path) -> None:
     key = winreg.OpenKey(
         winreg.HKEY_CURRENT_USER,
         r"Software\Microsoft\Windows\CurrentVersion\Run",
         0, winreg.KEY_SET_VALUE,
     )
-    winreg.SetValueEx(key, _TASK_NAME, 0, winreg.REG_SZ, cmd)
+    winreg.SetValueEx(key, _TASK_NAME, 0, winreg.REG_SZ, f'"{exe}"')
     winreg.CloseKey(key)
 
 
-def _launch_tray(python: str) -> None:
-    # Kill any running instance first
-    subprocess.run(
-        ["taskkill", "/F", "/IM", "python.exe", "/FI", f"WINDOWTITLE eq ollama_tray"],
-        capture_output=True,
-    )
-    subprocess.Popen([python, "-m", "ollama_tray"], close_fds=True)
+def _launch(exe: Path) -> None:
+    subprocess.Popen([str(exe)], close_fds=True)
 
 
 def run_gui() -> None:
     import tkinter as tk
-    from tkinter import font as tkfont
 
     UI_FONT = "Segoe UI"
     BG      = "#1e1e2e"
@@ -91,7 +70,7 @@ def run_gui() -> None:
     root.configure(bg=BG)
     root.attributes("-topmost", True)
 
-    w, h = 420, 300
+    w, h = 420, 260
     root.update_idletasks()
     x = (root.winfo_screenwidth()  - w) // 2
     y = (root.winfo_screenheight() - h) // 2
@@ -109,7 +88,7 @@ def run_gui() -> None:
              font=(UI_FONT, 9), anchor="w", wraplength=360).pack(fill="x", pady=(0, 10))
 
     log_text = tk.Text(body, bg=SURFACE, fg=FG, relief="flat",
-                       font=("Consolas", 9), height=7, state="disabled", bd=0)
+                       font=("Consolas", 9), height=6, state="disabled", bd=0)
     log_text.pack(fill="x")
 
     footer = tk.Frame(root, bg="#181825", pady=10, padx=20)
@@ -129,42 +108,36 @@ def run_gui() -> None:
         log_text.configure(state="disabled")
         root.update_idletasks()
 
-    def _install() -> None:
+    def _do_install() -> None:
         btn.configure(state="disabled")
         root.update_idletasks()
 
-        status_var.set("Locating Python...")
+        status_var.set("Locating ollama-tray...")
         root.update_idletasks()
-        python = _find_python()
-        if not python:
-            _log("ERROR: Python not found in PATH.", RED)
-            status_var.set("Python not found. Install Python 3.10+ and retry.")
+        src = _bundled_tray_exe()
+        if src is None:
+            _log("ERROR: ollama-tray.exe not found in bundle.", RED)
+            status_var.set("Install failed — bundled exe missing.")
             btn.configure(state="normal", text="Retry")
             return
-        _log(f"Python: {python}", DIM)
+        _log(f"Found: {src}", DIM)
 
-        req = _requirements_path()
-        if req is None:
-            _log("ERROR: requirements.txt not found (checked bundle + exe dir).", RED)
-            status_var.set("requirements.txt not found.")
-            btn.configure(state="normal", text="Retry")
-            return
-
-        status_var.set("Installing dependencies...")
+        status_var.set(f"Installing to {_INSTALL_DIR}...")
         root.update_idletasks()
-        ok, err = _install_deps(python, req)
-        if not ok:
-            _log(f"pip error: {err[:200]}", RED)
-            status_var.set("Dependency install failed.")
+        try:
+            dst = _install(src)
+            _log(f"Installed: {dst}", GREEN)
+        except Exception as e:
+            _log(f"Copy error: {e}", RED)
+            status_var.set("Install failed.")
             btn.configure(state="normal", text="Retry")
             return
-        _log("Dependencies installed.", GREEN)
 
         status_var.set("Registering autostart...")
         root.update_idletasks()
         try:
-            _register_autostart(python)
-            _log(f"Autostart registered (HKCU\\Run\\{_TASK_NAME}).", GREEN)
+            _register_autostart(dst)
+            _log(f"Autostart: HKCU\\Run\\{_TASK_NAME}", GREEN)
         except Exception as e:
             _log(f"Registry error: {e}", RED)
             status_var.set("Could not register autostart.")
@@ -174,16 +147,16 @@ def run_gui() -> None:
         status_var.set("Starting OllamaTray...")
         root.update_idletasks()
         try:
-            _launch_tray(python)
+            _launch(dst)
             _log("Tray launched.", GREEN)
         except Exception as e:
             _log(f"Launch error: {e}", RED)
 
-        status_var.set("Installation complete. Tray icon is now active.")
+        status_var.set("Done! OllamaTray is running — look for the icon in the system tray.")
         btn.configure(state="normal", text="Close", command=root.destroy,
                       bg="#a6e3a1", activebackground="#94e2d5")
 
-    btn.configure(command=_install)
+    btn.configure(command=_do_install)
     root.protocol("WM_DELETE_WINDOW", root.destroy)
     root.mainloop()
 
