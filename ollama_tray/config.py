@@ -93,6 +93,60 @@ def _ver(
         return default
 
 
+_THEMES: dict[str, dict[str, str]] = {
+    "dark": {
+        "bg":        "#1e1e2e",
+        "bg_dark":   "#181825",
+        "surface":   "#313244",
+        "surface1":  "#45475a",
+        "overlay0":  "#585b70",
+        "dim":       "#6c7086",
+        "subtext":   "#a6adc8",
+        "fg":        "#cdd6f4",
+        "blue":      "#89b4fa",
+        "blue_act":  "#74c7ec",
+        "green":     "#a6e3a1",
+        "green_act": "#94e2d5",
+        "yellow":    "#f9e2af",
+        "red":       "#f38ba8",
+    },
+    "light": {
+        "bg":        "#eff1f5",
+        "bg_dark":   "#e6e9ef",
+        "surface":   "#ccd0da",
+        "surface1":  "#bcc0cc",
+        "overlay0":  "#9ca0b0",
+        "dim":       "#7c7f93",
+        "subtext":   "#5c5f77",
+        "fg":        "#4c4f69",
+        "blue":      "#1e66f5",
+        "blue_act":  "#209fb5",
+        "green":     "#40a02b",
+        "green_act": "#179299",
+        "yellow":    "#df8e1d",
+        "red":       "#d20f39",
+    },
+    "black": {
+        "bg":        "#000000",
+        "bg_dark":   "#0a0a0a",
+        "surface":   "#141414",
+        "surface1":  "#242424",
+        "overlay0":  "#3c3c3c",
+        "dim":       "#858585",
+        "subtext":   "#aaaaaa",
+        "fg":        "#f8f8f8",
+        "blue":      "#5fa8f5",
+        "blue_act":  "#4fc9de",
+        "green":     "#4de87c",
+        "green_act": "#3dccbd",
+        "yellow":    "#ffd500",
+        "red":       "#ff4444",
+    },
+}
+
+AVAILABLE_THEMES: list[str] = list(_THEMES)
+
+
 def _apply(cp: configparser.ConfigParser) -> None:
     """Write all parsed values into this module's globals."""
     g = globals()
@@ -113,6 +167,9 @@ def _apply(cp: configparser.ConfigParser) -> None:
         "stopping": _rgb(cp, "color_stopping", (255, 193,   7)),
         "unknown":  _rgb(cp, "color_unknown",  (255, 193,   7)),
     }
+    theme_name             = _s(cp, "ui_theme", "dark")
+    g["UI_THEME"]          = theme_name
+    g["UI_COLOR"]          = dict(_THEMES.get(theme_name, _THEMES["dark"]))
 
 
 # ── initial load ──────────────────────────────────────────────────────────────
@@ -163,6 +220,29 @@ def reload() -> bool:
         except Exception:
             pass
     return True
+
+
+def set_theme(name: str) -> None:
+    """Apply theme immediately and persist to config.properties when possible."""
+    import re
+    g = globals()
+    g["UI_THEME"] = name
+    g["UI_COLOR"] = dict(_THEMES.get(name, _THEMES["dark"]))
+    if _config_path and _config_path.exists():
+        try:
+            text = _config_path.read_text(encoding="utf-8")
+            if re.search(r"^ui_theme\s*=", text, re.MULTILINE):
+                text = re.sub(r"^ui_theme\s*=.*$", f"ui_theme = {name}", text, flags=re.MULTILINE)
+            else:
+                text += f"\nui_theme = {name}\n"
+            _config_path.write_text(text, encoding="utf-8")
+        except Exception:
+            pass
+    for cb in list(_callbacks):
+        try:
+            cb()
+        except Exception:
+            pass
 
 
 def start_watcher() -> None:

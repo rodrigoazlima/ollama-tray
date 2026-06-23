@@ -6,4 +6,6 @@ from ollama_tray.config import (  # noqa: F401
     STATUS_COLOR,
     STATUS_INTERVAL,
     TOGGLE_DEBOUNCE_S,
+    UI_COLOR,
+    UI_THEME,
 )

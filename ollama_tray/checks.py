@@ -17,7 +17,7 @@ import urllib.error
 import urllib.request
 from typing import Callable
 
-from ollama_tray.config import MIN_OLLAMA as _MIN_OLLAMA, OLLAMA_URL, SERVE_HOST
+from ollama_tray.config import MIN_OLLAMA as _MIN_OLLAMA, OLLAMA_URL, SERVE_HOST, UI_COLOR as _COLOR
 
 _MIN_PYTHON = (3, 10)
 
@@ -168,7 +168,7 @@ def _show_download_prompt(download_url: str) -> None:
     root = tk.Tk()
     root.title("Ollama Not Found")
     root.resizable(False, False)
-    root.configure(bg="#1e1e2e")
+    root.configure(bg=_COLOR["bg"])
     root.attributes("-topmost", True)
 
     w, h = 420, 210
@@ -179,12 +179,12 @@ def _show_download_prompt(download_url: str) -> None:
 
     tk.Label(
         root, text="  Ollama Not Found",
-        bg="#313244", fg="#cdd6f4",
+        bg=_COLOR["surface"], fg=_COLOR["fg"],
         font=(_FONT_UI, 11, "bold"),
         anchor="w", padx=8, pady=7,
     ).pack(fill="x")
 
-    body = tk.Frame(root, bg="#1e1e2e", padx=20, pady=14)
+    body = tk.Frame(root, bg=_COLOR["bg"], padx=20, pady=14)
     body.pack(fill="both", expand=True)
 
     tk.Label(
@@ -194,12 +194,12 @@ def _show_download_prompt(download_url: str) -> None:
             "Service controls will be unavailable.\n"
             "Install Ollama and restart the tray at any time."
         ),
-        bg="#1e1e2e", fg="#cdd6f4",
+        bg=_COLOR["bg"], fg=_COLOR["fg"],
         font=(_FONT_UI, 10),
         justify="left", anchor="w", wraplength=380,
     ).pack(fill="x")
 
-    btn_frame = tk.Frame(root, bg="#1e1e2e", pady=12)
+    btn_frame = tk.Frame(root, bg=_COLOR["bg"], pady=12)
     btn_frame.pack(fill="x", padx=20)
 
     def _download() -> None:
@@ -209,19 +209,19 @@ def _show_download_prompt(download_url: str) -> None:
     tk.Button(
         btn_frame, text="Download Ollama",
         command=_download,
-        bg="#89b4fa", fg="#1e1e2e",
+        bg=_COLOR["blue"], fg=_COLOR["bg"],
         font=(_FONT_UI, 10, "bold"),
         relief="flat", padx=14, pady=5, cursor="hand2",
-        activebackground="#74c7ec", activeforeground="#1e1e2e",
+        activebackground=_COLOR["blue_act"], activeforeground=_COLOR["bg"],
     ).pack(side="left", padx=(0, 10))
 
     tk.Button(
         btn_frame, text="Continue without Ollama",
         command=root.destroy,
-        bg="#313244", fg="#cdd6f4",
+        bg=_COLOR["surface"], fg=_COLOR["fg"],
         font=(_FONT_UI, 10),
         relief="flat", padx=14, pady=5, cursor="hand2",
-        activebackground="#45475a", activeforeground="#cdd6f4",
+        activebackground=_COLOR["surface1"], activeforeground=_COLOR["fg"],
     ).pack(side="left")
 
     root.protocol("WM_DELETE_WINDOW", root.destroy)
@@ -346,7 +346,7 @@ def _show_ollama_start_dialog() -> None:
     root = tk.Tk()
     root.title("Start Ollama")
     root.resizable(False, False)
-    root.configure(bg="#1e1e2e")
+    root.configure(bg=_COLOR["bg"])
     root.attributes("-topmost", True)
 
     w, h = 480, 390
@@ -358,7 +358,7 @@ def _show_ollama_start_dialog() -> None:
     # ── header ────────────────────────────────────────────────────────────────
     tk.Label(
         root, text="  Ollama is Not Running",
-        bg="#313244", fg="#cdd6f4",
+        bg=_COLOR["surface"], fg=_COLOR["fg"],
         font=(_FONT_UI, 11, "bold"),
         anchor="w", padx=8, pady=7,
     ).pack(fill="x")
@@ -366,27 +366,27 @@ def _show_ollama_start_dialog() -> None:
     tk.Label(
         root,
         text="  Configure and start Ollama locally, or continue with limited functionality.",
-        bg="#1e1e2e", fg="#6c7086",
+        bg=_COLOR["bg"], fg=_COLOR["dim"],
         font=(_FONT_UI, 9),
         anchor="w", padx=8, pady=3,
     ).pack(fill="x")
 
-    body = tk.Frame(root, bg="#1e1e2e", padx=20, pady=10)
+    body = tk.Frame(root, bg=_COLOR["bg"], padx=20, pady=10)
     body.pack(fill="both", expand=True)
 
     # ── helper: labelled row ──────────────────────────────────────────────────
     def _label_row(text: str, hint: str = "") -> tk.Frame:
-        f = tk.Frame(body, bg="#1e1e2e")
+        f = tk.Frame(body, bg=_COLOR["bg"])
         f.pack(fill="x", pady=(6, 0))
         tk.Label(
             f, text=text,
-            bg="#1e1e2e", fg="#a6adc8",
+            bg=_COLOR["bg"], fg=_COLOR["subtext"],
             font=(_FONT_UI, 9, "bold"), anchor="w",
         ).pack(side="left")
         if hint:
             tk.Label(
                 f, text=hint,
-                bg="#1e1e2e", fg="#585b70",
+                bg=_COLOR["bg"], fg=_COLOR["overlay0"],
                 font=(_FONT_UI, 8), anchor="w",
             ).pack(side="left", padx=(6, 0))
         return f
@@ -396,7 +396,7 @@ def _show_ollama_start_dialog() -> None:
     host_var = tk.StringVar(value=SERVE_HOST)
     tk.Entry(
         body, textvariable=host_var,
-        bg="#313244", fg="#cdd6f4", insertbackground="#cdd6f4",
+        bg=_COLOR["surface"], fg=_COLOR["fg"], insertbackground=_COLOR["fg"],
         relief="flat", font=(_FONT_MONO, 10), width=36,
     ).pack(fill="x", ipady=4, pady=(3, 0))
 
@@ -408,11 +408,11 @@ def _show_ollama_start_dialog() -> None:
     style.theme_use("default")
     style.configure(
         "Dark.TCombobox",
-        fieldbackground="#313244",
-        background="#313244",
-        foreground="#cdd6f4",
-        selectbackground="#45475a",
-        selectforeground="#cdd6f4",
+        fieldbackground=_COLOR["surface"],
+        background=_COLOR["surface"],
+        foreground=_COLOR["fg"],
+        selectbackground=_COLOR["surface1"],
+        selectforeground=_COLOR["fg"],
     )
 
     combo = ttk.Combobox(
@@ -425,7 +425,7 @@ def _show_ollama_start_dialog() -> None:
     status_var = tk.StringVar(value="")
     status_lbl = tk.Label(
         body, textvariable=status_var,
-        bg="#1e1e2e", fg="#6c7086",
+        bg=_COLOR["bg"], fg=_COLOR["dim"],
         font=(_FONT_UI, 8), anchor="w",
     )
     status_lbl.pack(fill="x")
@@ -450,10 +450,10 @@ def _show_ollama_start_dialog() -> None:
     ref_btn = tk.Button(
         model_row, text="↻ Refresh",
         command=_refresh_models,
-        bg="#45475a", fg="#cdd6f4",
+        bg=_COLOR["surface1"], fg=_COLOR["fg"],
         relief="flat", font=(_FONT_UI, 8), padx=6, pady=1,
         cursor="hand2",
-        activebackground="#585b70", activeforeground="#cdd6f4",
+        activebackground=_COLOR["overlay0"], activeforeground=_COLOR["fg"],
     )
     ref_btn.pack(side="right")
 
@@ -464,7 +464,7 @@ def _show_ollama_start_dialog() -> None:
     env_text = tk.Text(
         body,
         height=4,
-        bg="#313244", fg="#cdd6f4", insertbackground="#cdd6f4",
+        bg=_COLOR["surface"], fg=_COLOR["fg"], insertbackground=_COLOR["fg"],
         relief="flat", font=(_FONT_MONO, 9),
         wrap="none",
     )
@@ -477,17 +477,17 @@ def _show_ollama_start_dialog() -> None:
         "# OLLAMA_ORIGINS=*",
     ]
     env_text.insert("1.0", "\n".join(examples))
-    env_text.configure(fg="#45475a")  # dim placeholder
+    env_text.configure(fg=_COLOR["surface1"])  # dim placeholder
 
     def _clear_placeholder(event: object) -> None:
         if env_text.get("1.0", "end").strip() == "\n".join(examples):
             env_text.delete("1.0", "end")
-            env_text.configure(fg="#cdd6f4")
+            env_text.configure(fg=_COLOR["fg"])
 
     env_text.bind("<FocusIn>", _clear_placeholder)
 
     # ── buttons ───────────────────────────────────────────────────────────────
-    btn_frame = tk.Frame(root, bg="#181825", pady=12, padx=20)
+    btn_frame = tk.Frame(root, bg=_COLOR["bg_dark"], pady=12, padx=20)
     btn_frame.pack(fill="x")
 
     def _start() -> None:
@@ -507,19 +507,19 @@ def _show_ollama_start_dialog() -> None:
     tk.Button(
         btn_frame, text="▶  Start Ollama",
         command=_start,
-        bg="#a6e3a1", fg="#1e1e2e",
+        bg=_COLOR["green"], fg=_COLOR["bg"],
         font=(_FONT_UI, 10, "bold"),
         relief="flat", padx=16, pady=6, cursor="hand2",
-        activebackground="#94e2d5", activeforeground="#1e1e2e",
+        activebackground=_COLOR["green_act"], activeforeground=_COLOR["bg"],
     ).pack(side="left", padx=(0, 10))
 
     tk.Button(
         btn_frame, text="Continue without starting",
         command=_skip,
-        bg="#313244", fg="#cdd6f4",
+        bg=_COLOR["surface"], fg=_COLOR["fg"],
         font=(_FONT_UI, 10),
         relief="flat", padx=14, pady=6, cursor="hand2",
-        activebackground="#45475a", activeforeground="#cdd6f4",
+        activebackground=_COLOR["surface1"], activeforeground=_COLOR["fg"],
     ).pack(side="left")
 
     root.protocol("WM_DELETE_WINDOW", _skip)

@@ -57,6 +57,8 @@ def _run_dialog() -> None:
             )
             return
 
+        c = _cfg.UI_COLOR
+
         root = tk.Tk()
         with _dialog_lock:
             global _dialog_root
@@ -64,7 +66,7 @@ def _run_dialog() -> None:
 
         root.title("Ollama Resource Monitor")
         root.resizable(False, False)
-        root.configure(bg="#1e1e2e")
+        root.configure(bg=c["bg"])
 
         from ollama_tray.icon import _icon_path
         if _icon_path:
@@ -82,35 +84,35 @@ def _run_dialog() -> None:
 
         tk.Label(
             root, text="  Ollama Resource Monitor",
-            bg="#313244", fg="#cdd6f4",
+            bg=c["surface"], fg=c["fg"],
             font=(_UI_FONT, 11, "bold"),
             anchor="w", padx=8, pady=6,
         ).pack(fill="x")
 
-        frame = tk.Frame(root, bg="#1e1e2e")
+        frame = tk.Frame(root, bg=c["bg"])
         frame.pack(fill="both", expand=True, padx=12, pady=8)
 
         txt = tk.Text(
             frame,
             font=(_MONO_FONT, 10),
-            bg="#1e1e2e", fg="#cdd6f4",
-            insertbackground="#cdd6f4",
+            bg=c["bg"], fg=c["fg"],
+            insertbackground=c["fg"],
             relief="flat", bd=0,
             width=52, height=14,
             state="disabled",
         )
         txt.pack(fill="both", expand=True)
 
-        txt.tag_configure("header", foreground="#89b4fa", font=(_MONO_FONT, 10, "bold"))
-        txt.tag_configure("good",   foreground="#a6e3a1")
-        txt.tag_configure("warn",   foreground="#f9e2af")
-        txt.tag_configure("bad",    foreground="#f38ba8")
-        txt.tag_configure("dim",    foreground="#6c7086")
-        txt.tag_configure("sep",    foreground="#313244")
+        txt.tag_configure("header", foreground=c["blue"],   font=(_MONO_FONT, 10, "bold"))
+        txt.tag_configure("good",   foreground=c["green"])
+        txt.tag_configure("warn",   foreground=c["yellow"])
+        txt.tag_configure("bad",    foreground=c["red"])
+        txt.tag_configure("dim",    foreground=c["dim"])
+        txt.tag_configure("sep",    foreground=c["surface"])
 
         footer = tk.Label(
             root, text="",
-            bg="#181825", fg="#6c7086",
+            bg=c["bg_dark"], fg=c["dim"],
             font=(_MONO_FONT, 9), anchor="w", padx=8, pady=4,
         )
         footer.pack(fill="x")

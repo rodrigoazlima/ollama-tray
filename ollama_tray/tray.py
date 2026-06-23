@@ -50,6 +50,9 @@ class OllamaTray:
         if self._icon:
             self._icon.stop()
 
+    def _set_theme(self, name: str, *_) -> None:
+        _cfg.set_theme(name)
+
     def _on_config_change(self) -> None:
         from ollama_tray.icon import invalidate_cache
         invalidate_cache()
@@ -88,6 +91,11 @@ class OllamaTray:
         self._status = get_status()
         refresh_stats()
 
+        theme_menu = Menu(
+            *(item(name.capitalize(), lambda *_, n=name: self._set_theme(n))
+              for name in _cfg.AVAILABLE_THEMES)
+        )
+
         menu = Menu(
             item(self._stats_label, self._toggle_dialog, default=True),
             Menu.SEPARATOR,
@@ -96,6 +104,7 @@ class OllamaTray:
             item("Restart Service", self._restart),
             Menu.SEPARATOR,
             item("Open in Browser", self._open_browser),
+            item("Theme",           theme_menu),
             Menu.SEPARATOR,
             item("Exit",            self._exit),
         )
