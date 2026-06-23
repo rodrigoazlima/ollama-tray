@@ -9,19 +9,20 @@ def redirect_frozen_streams(log_base: str | None = None) -> None:
     to a rolling log file so print() calls in CLI and startup-check code don't
     crash the process.
     """
+    # Always reconfigure to UTF-8: Windows console defaults to cp1252 which
+    # cannot encode many Unicode chars even when running from source.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
     if not getattr(sys, "frozen", False):
         return
     try:
         sys.stdout.write("")
         sys.stderr.write("")
-        # Streams writable but may use a narrow codec (e.g. cp1252).
-        # Reconfigure both to UTF-8 so non-ASCII chars don't crash.
-        for stream in (sys.stdout, sys.stderr):
-            if hasattr(stream, "reconfigure"):
-                try:
-                    stream.reconfigure(encoding="utf-8", errors="replace")
-                except Exception:
-                    pass
         return
     except (AttributeError, OSError):
         pass
