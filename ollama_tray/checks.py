@@ -152,10 +152,91 @@ def check_pystray_backend() -> None:
 
 # ── non-fatal checks ──────────────────────────────────────────────────────────
 
-def check_ollama_binary() -> bool:
+def _show_download_prompt(download_url: str) -> None:
     """
-    Warn if Ollama binary cannot be found. Returns True if found.
-    Non-fatal: tray starts with 'unknown' status and service controls disabled.
+    Tkinter dialog shown when Ollama is not found.
+    Offers a Download button (opens browser) and a Continue button.
+    Tray starts either way — user can install Ollama and restart.
+    Only call this after check_tkinter() has confirmed tkinter is available.
+    """
+    import tkinter as tk
+    import webbrowser
+
+    root = tk.Tk()
+    root.title("Ollama Not Found")
+    root.resizable(False, False)
+    root.configure(bg="#1e1e2e")
+    root.attributes("-topmost", True)
+
+    # Centre on screen
+    root.update_idletasks()
+    w, h = 420, 210
+    x = (root.winfo_screenwidth()  - w) // 2
+    y = (root.winfo_screenheight() - h) // 2
+    root.geometry(f"{w}x{h}+{x}+{y}")
+
+    # Header bar
+    tk.Label(
+        root, text="  Ollama Not Found",
+        bg="#313244", fg="#cdd6f4",
+        font=("Segoe UI" if sys.platform == "win32" else "Noto Sans", 11, "bold"),
+        anchor="w", padx=8, pady=7,
+    ).pack(fill="x")
+
+    # Body
+    body = tk.Frame(root, bg="#1e1e2e", padx=20, pady=14)
+    body.pack(fill="both", expand=True)
+
+    tk.Label(
+        body,
+        text=(
+            "Ollama is not installed or was not found in PATH.\n\n"
+            "Service controls will be unavailable.\n"
+            "You can install Ollama and restart the tray at any time."
+        ),
+        bg="#1e1e2e", fg="#cdd6f4",
+        font=("Segoe UI" if sys.platform == "win32" else "Noto Sans", 10),
+        justify="left", anchor="w",
+        wraplength=380,
+    ).pack(fill="x")
+
+    # Button row
+    btn_frame = tk.Frame(root, bg="#1e1e2e", pady=12)
+    btn_frame.pack(fill="x", padx=20)
+
+    def _download() -> None:
+        webbrowser.open(download_url)
+        root.destroy()
+
+    def _continue() -> None:
+        root.destroy()
+
+    tk.Button(
+        btn_frame, text="Download Ollama",
+        command=_download,
+        bg="#89b4fa", fg="#1e1e2e",
+        font=("Segoe UI" if sys.platform == "win32" else "Noto Sans", 10, "bold"),
+        relief="flat", padx=14, pady=5, cursor="hand2",
+        activebackground="#74c7ec", activeforeground="#1e1e2e",
+    ).pack(side="left", padx=(0, 10))
+
+    tk.Button(
+        btn_frame, text="Continue without Ollama",
+        command=_continue,
+        bg="#313244", fg="#cdd6f4",
+        font=("Segoe UI" if sys.platform == "win32" else "Noto Sans", 10),
+        relief="flat", padx=14, pady=5, cursor="hand2",
+        activebackground="#45475a", activeforeground="#cdd6f4",
+    ).pack(side="left")
+
+    root.protocol("WM_DELETE_WINDOW", _continue)
+    root.mainloop()
+
+
+def check_ollama_binary(gui: bool = True) -> bool:
+    """
+    Prompt to download Ollama if binary not found (GUI mode) or warn to stderr
+    (CLI mode). Returns True if found. Non-fatal either way.
     """
     if sys.platform == "win32":
         candidates = [
@@ -174,12 +255,14 @@ def check_ollama_binary() -> bool:
         download_url = "https://ollama.com/install.sh"
 
     if not found:
-        _show_warning(
-            "ollama-tray: Ollama not found",
-            "Ollama does not appear to be installed.\n"
-            "Service controls will be unavailable until Ollama is installed.\n\n"
-            f"Download: {download_url}",
-        )
+        if gui:
+            _show_download_prompt(download_url)
+        else:
+            print(
+                f"Warning: Ollama not found. Service controls unavailable.\n"
+                f"Install: {download_url}",
+                file=sys.stderr,
+            )
     return found
 
 
@@ -238,6 +321,6 @@ def run_startup_checks(gui: bool = True) -> None:
                 print(f"Error: {msg}", file=sys.stderr)
             sys.exit(1)
 
-    # Non-fatal: warn and continue
-    check_ollama_binary()
+    # Non-fatal: prompt/warn and continue
+    check_ollama_binary(gui=gui)
     check_ollama_version()
