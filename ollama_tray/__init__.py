@@ -1,4 +1,4 @@
-__version__ = "1.1.0rc3"
+__version__ = "1.1.0rc4"
 
 from ollama_tray.cli import main
 
