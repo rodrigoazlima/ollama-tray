@@ -177,6 +177,16 @@ ollama_models_dir =
 # Set to 1 to restore AMD default behaviour; leave blank on non-AMD systems
 hsa_enable_sdma =
 
+# ── Model preload ─────────────────────────────────────────────────────────────
+
+# Model to load into VRAM after Ollama starts (blank = none)
+# Example: preload_model = qwen3:30b-a3b
+preload_model =
+
+# Auto-start Ollama silently at tray launch when not running: true | false
+# false = show the "Start Ollama" dialog instead
+auto_start = false
+
 # ── Recovery ──────────────────────────────────────────────────────────────────
 
 # Automatically restart Ollama when it stops unexpectedly: true | false
@@ -274,6 +284,8 @@ def _apply(cp: configparser.ConfigParser) -> None:
     g["OLLAMA_NUM_PARALLEL"]      = _i(cp, "ollama_num_parallel",       1)
     g["OLLAMA_MAX_LOADED_MODELS"] = _i(cp, "ollama_max_loaded_models",  1)
     g["HSA_ENABLE_SDMA"]          = _s(cp, "hsa_enable_sdma",           "")
+    g["PRELOAD_MODEL"]            = _s(cp, "preload_model",             "")
+    g["AUTO_START"]               = _s(cp, "auto_start",               "false").lower() == "true"
     g["AUTO_RECOVER"]             = _s(cp, "auto_recover",              "false").lower() == "true"
 
 
@@ -365,6 +377,28 @@ def set_theme(name: str) -> None:
             cb()
         except Exception:
             pass
+
+
+def build_serve_env() -> dict[str, str]:
+    """Return an environment dict for `ollama serve` built from current config globals."""
+    env = os.environ.copy()
+    if SERVE_HOST:
+        env["OLLAMA_HOST"] = SERVE_HOST
+    if OLLAMA_MODELS_DIR:
+        env["OLLAMA_MODELS"] = OLLAMA_MODELS_DIR
+    if OLLAMA_NUM_GPU:
+        env["OLLAMA_NUM_GPU"] = OLLAMA_NUM_GPU
+    if OLLAMA_FLASH_ATTENTION == "1":
+        env["OLLAMA_FLASH_ATTENTION"] = "1"
+    if OLLAMA_KV_CACHE_TYPE and OLLAMA_KV_CACHE_TYPE != "f16":
+        env["OLLAMA_KV_CACHE_TYPE"] = OLLAMA_KV_CACHE_TYPE
+    if OLLAMA_NUM_PARALLEL > 1:
+        env["OLLAMA_NUM_PARALLEL"] = str(OLLAMA_NUM_PARALLEL)
+    if OLLAMA_MAX_LOADED_MODELS > 1:
+        env["OLLAMA_MAX_LOADED_MODELS"] = str(OLLAMA_MAX_LOADED_MODELS)
+    if HSA_ENABLE_SDMA:
+        env["HSA_ENABLE_SDMA"] = HSA_ENABLE_SDMA
+    return env
 
 
 def start_watcher() -> None:

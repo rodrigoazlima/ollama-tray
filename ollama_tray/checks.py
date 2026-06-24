@@ -285,14 +285,44 @@ def _get_ollama_models() -> list[str]:
         return []
 
 
+def schedule_preload(api_base: str, model: str) -> None:
+    """Poll until ollama is up, then warm the model into VRAM (keep_alive=-1)."""
+    import time
+
+    def _run() -> None:
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            time.sleep(1)
+            try:
+                urllib.request.urlopen(f"{api_base}/api/version", timeout=2)
+                break
+            except Exception:
+                continue
+        else:
+            return  # timed out waiting for server
+        try:
+            payload = json.dumps({"model": model, "keep_alive": -1}).encode()
+            req = urllib.request.Request(
+                f"{api_base}/api/generate", data=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            urllib.request.urlopen(req, timeout=120)
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def _launch_ollama(host: str, extra_env_text: str, preload_model: str) -> None:
     """
     Start `ollama serve` as a detached subprocess.
-    If preload_model is given, sends a keep-alive load request after 3 s.
+    Env is built from config.properties settings; extra_env_text entries override.
+    If preload_model is given, warms it into VRAM once the server is up.
     """
-    env = os.environ.copy()
+    from ollama_tray.config import build_serve_env, OLLAMA_URL
+    env = build_serve_env()
     if host:
-        env["OLLAMA_HOST"] = host
+        env["OLLAMA_HOST"] = host  # dialog host overrides config SERVE_HOST
 
     for line in extra_env_text.splitlines():
         line = line.strip()
@@ -309,28 +339,13 @@ def _launch_ollama(host: str, extra_env_text: str, preload_model: str) -> None:
         )
     else:
         kwargs["start_new_session"] = True
+        kwargs["stdout"] = subprocess.DEVNULL
+        kwargs["stderr"] = subprocess.DEVNULL
 
     subprocess.Popen(["ollama", "serve"], **kwargs)
 
     if preload_model:
-        # resolve the port from host field so we can call the right endpoint
-        port = host.split(":")[-1] if ":" in host else "11434"
-        api_url = f"http://127.0.0.1:{port}/api/generate"
-
-        def _preload() -> None:
-            import time
-            time.sleep(3)
-            try:
-                payload = json.dumps({"model": preload_model, "keep_alive": -1}).encode()
-                req = urllib.request.Request(
-                    api_url, data=payload,
-                    headers={"Content-Type": "application/json"},
-                )
-                urllib.request.urlopen(req, timeout=30)
-            except Exception:
-                pass
-
-        threading.Thread(target=_preload, daemon=True).start()
+        schedule_preload(OLLAMA_URL, preload_model)
 
 
 def _show_ollama_start_dialog() -> None:
@@ -402,7 +417,8 @@ def _show_ollama_start_dialog() -> None:
 
     # ── model ─────────────────────────────────────────────────────────────────
     model_row = _label_row("Model to preload", "  (optional — loads into memory after start)")
-    model_var = tk.StringVar(value="(none)")
+    from ollama_tray.config import PRELOAD_MODEL
+    model_var = tk.StringVar(value=PRELOAD_MODEL or "(none)")
 
     style = ttk.Style()
     style.theme_use("default")
@@ -528,11 +544,16 @@ def _show_ollama_start_dialog() -> None:
 
 def check_ollama_running(gui: bool = True) -> None:
     """
-    Show start dialog (GUI) or warn to stderr (CLI) when the Ollama server is
-    not responding. Non-fatal — tray starts regardless.
-    Only relevant when the Ollama binary was already confirmed present.
+    Start or prompt to start Ollama when the server is not responding.
+    auto_start=true: starts silently using config settings + preloads configured model.
+    auto_start=false: shows the dialog (GUI) or warns to stderr (CLI).
+    Non-fatal — tray starts regardless.
     """
     if _is_ollama_running():
+        return
+    from ollama_tray.config import AUTO_START, PRELOAD_MODEL, SERVE_HOST
+    if AUTO_START:
+        _launch_ollama(SERVE_HOST, "", PRELOAD_MODEL)
         return
     if gui:
         _show_ollama_start_dialog()

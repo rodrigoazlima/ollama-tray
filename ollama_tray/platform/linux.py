@@ -130,33 +130,13 @@ def _svc_stop() -> None:
 
 
 def _ollama_env() -> dict[str, str]:
-    """Build environment dict for `ollama serve` from config settings."""
-    from ollama_tray.config import (
-        SERVE_HOST, OLLAMA_MODELS_DIR, OLLAMA_NUM_GPU, OLLAMA_FLASH_ATTENTION,
-        OLLAMA_KV_CACHE_TYPE, OLLAMA_NUM_PARALLEL, OLLAMA_MAX_LOADED_MODELS,
-        HSA_ENABLE_SDMA,
-    )
-    env = os.environ.copy()
-    if SERVE_HOST:
-        env["OLLAMA_HOST"] = SERVE_HOST
-    if OLLAMA_MODELS_DIR:
-        env["OLLAMA_MODELS"] = OLLAMA_MODELS_DIR
-    if OLLAMA_NUM_GPU:
-        env["OLLAMA_NUM_GPU"] = OLLAMA_NUM_GPU
-    if OLLAMA_FLASH_ATTENTION == "1":
-        env["OLLAMA_FLASH_ATTENTION"] = "1"
-    if OLLAMA_KV_CACHE_TYPE and OLLAMA_KV_CACHE_TYPE != "f16":
-        env["OLLAMA_KV_CACHE_TYPE"] = OLLAMA_KV_CACHE_TYPE
-    if OLLAMA_NUM_PARALLEL > 1:
-        env["OLLAMA_NUM_PARALLEL"] = str(OLLAMA_NUM_PARALLEL)
-    if OLLAMA_MAX_LOADED_MODELS > 1:
-        env["OLLAMA_MAX_LOADED_MODELS"] = str(OLLAMA_MAX_LOADED_MODELS)
-    if HSA_ENABLE_SDMA:
-        env["HSA_ENABLE_SDMA"] = HSA_ENABLE_SDMA
-    return env
+    from ollama_tray.config import build_serve_env
+    return build_serve_env()
 
 
 def _start_process() -> None:
+    from ollama_tray.config import PRELOAD_MODEL, OLLAMA_URL
+    from ollama_tray.checks import schedule_preload
     try:
         subprocess.Popen(
             ["ollama", "serve"],
@@ -172,6 +152,9 @@ def _start_process() -> None:
             "Ollama binary not found in PATH.\n"
             "Install: curl -fsSL https://ollama.com/install.sh | sh",
         )
+        return
+    if PRELOAD_MODEL:
+        schedule_preload(OLLAMA_URL, PRELOAD_MODEL)
 
 
 def _stop_process() -> None:
