@@ -192,6 +192,11 @@ auto_start = false
 # Automatically restart Ollama when it stops unexpectedly: true | false
 auto_recover = false
 
+# ── Updates ───────────────────────────────────────────────────────────────────
+
+# Check for a newer version of ollama-tray on startup and prompt to install: true | false
+check_for_updates = true
+
 # ── Window / UI theme ─────────────────────────────────────────────────────────
 
 # Theme for tkinter dialogs: dark | light | black
@@ -287,6 +292,7 @@ def _apply(cp: configparser.ConfigParser) -> None:
     g["PRELOAD_MODEL"]            = _s(cp, "preload_model",             "")
     g["AUTO_START"]               = _s(cp, "auto_start",               "false").lower() == "true"
     g["AUTO_RECOVER"]             = _s(cp, "auto_recover",              "false").lower() == "true"
+    g["CHECK_FOR_UPDATES"]        = _s(cp, "check_for_updates",         "true").lower()  == "true"
 
 
 # ── initial load ──────────────────────────────────────────────────────────────

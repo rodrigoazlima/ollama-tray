@@ -3,3 +3,4 @@ Pillow>=10.0
 pywin32>=306
 psutil>=5.9
 watchdog>=4.0
+packaging>=21.0

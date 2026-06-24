@@ -595,6 +595,73 @@ def check_ollama_version() -> None:
         )
 
 
+# ── self-update check ─────────────────────────────────────────────────────────
+
+def check_app_update() -> None:
+    """Non-blocking: fetch latest_version.txt from GitHub, prompt to install if newer."""
+    def _run() -> None:
+        try:
+            url = (
+                "https://raw.githubusercontent.com/rodrigoazlima"
+                "/ollama-tray/master/latest_version.txt"
+            )
+            with urllib.request.urlopen(url, timeout=5) as resp:
+                latest = resp.read().decode().strip()
+        except Exception:
+            return
+
+        from ollama_tray import __version__
+        try:
+            from packaging.version import Version
+            if Version(latest) <= Version(__version__):
+                return
+        except Exception:
+            return
+
+        tag = f"v{latest}"
+        if sys.platform == "win32":
+            asset = f"setup-{tag}-windows-x64.exe"
+            dl_url = (
+                f"https://github.com/rodrigoazlima/ollama-tray"
+                f"/releases/download/{tag}/{asset}"
+            )
+            msg = (
+                f"ollama-tray {latest} is available (you have {__version__}).\n\n"
+                "Download and install now?"
+            )
+            import ctypes
+            result = ctypes.windll.user32.MessageBoxW(
+                0, msg, "ollama-tray: Update Available",
+                0x24 | 0x40 | 0x1000,  # MB_YESNO | MB_ICONINFORMATION | MB_SETFOREGROUND
+            )
+            if result != 6:  # IDYES
+                return
+            import os, tempfile
+            tmp = os.path.join(tempfile.gettempdir(), f"ollama-tray-setup-{latest}.exe")
+            try:
+                with urllib.request.urlopen(dl_url, timeout=60) as resp:
+                    with open(tmp, "wb") as f:
+                        f.write(resp.read())
+            except Exception as exc:
+                _show_warning("ollama-tray: Update failed", f"Download failed:\n{exc}")
+                return
+            os.startfile(tmp)
+            os._exit(0)
+        else:
+            asset = f"ollama-tray-{tag}-linux-x64"
+            dl_url = (
+                f"https://github.com/rodrigoazlima/ollama-tray"
+                f"/releases/download/{tag}/{asset}"
+            )
+            _show_warning(
+                "ollama-tray: Update Available",
+                f"Version {latest} is available (you have {__version__}).\n"
+                f"Download: {dl_url}",
+            )
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 # ── orchestrator ──────────────────────────────────────────────────────────────
 
 def run_startup_checks(gui: bool = True) -> None:
@@ -627,3 +694,6 @@ def run_startup_checks(gui: bool = True) -> None:
     if ollama_found:
         check_ollama_running(gui=gui)
     check_ollama_version()
+    from ollama_tray.config import CHECK_FOR_UPDATES
+    if CHECK_FOR_UPDATES:
+        check_app_update()
