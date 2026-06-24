@@ -14,6 +14,8 @@ from pathlib import Path
 _INSTALL_DIR = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "OllamaTray"
 _EXE_NAME    = "ollama-tray.exe"
 _TASK_NAME   = "OllamaTray"
+_CONFIG_DIR  = Path.home() / ".ollama-tray"
+_CONFIG_NAME = "config.properties"
 
 
 def _bundled_tray_exe() -> Path | None:
@@ -21,11 +23,41 @@ def _bundled_tray_exe() -> Path | None:
         p = Path(sys._MEIPASS) / _EXE_NAME
         if p.exists():
             return p
-    # Dev/test fallback: look in dist/ relative to repo root
     dev = Path(__file__).resolve().parent.parent / "dist" / _EXE_NAME
     if dev.exists():
         return dev
     return None
+
+
+def _bundled_config() -> Path | None:
+    if getattr(sys, "frozen", False):
+        p = Path(sys._MEIPASS) / _CONFIG_NAME
+        if p.exists():
+            return p
+    dev = Path(__file__).resolve().parent.parent / _CONFIG_NAME
+    if dev.exists():
+        return dev
+    return None
+
+
+def _install_config_if_absent() -> list[str]:
+    """Copy bundled config.properties to ~/.ollama-tray/ only when none exists there."""
+    msgs: list[str] = []
+    dest = _CONFIG_DIR / _CONFIG_NAME
+    if dest.exists():
+        msgs.append(f"Config exists — keeping: {dest}")
+        return msgs
+    src = _bundled_config()
+    if src is None:
+        msgs.append("Warning: bundled config.properties not found — skipping.")
+        return msgs
+    try:
+        _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+        msgs.append(f"Config installed: {dest}")
+    except Exception as e:
+        msgs.append(f"Warning: could not install config: {e}")
+    return msgs
 
 
 def _uninstall_previous() -> list[str]:
@@ -165,6 +197,11 @@ def run_gui() -> None:
             status_var.set("Install failed.")
             btn.configure(state="normal", text="Retry")
             return
+
+        status_var.set("Installing configuration...")
+        root.update_idletasks()
+        for msg in _install_config_if_absent():
+            _log(msg, DIM)
 
         status_var.set("Registering autostart...")
         root.update_idletasks()

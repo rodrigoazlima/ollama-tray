@@ -20,11 +20,18 @@ if not os.path.exists(_tray_exe):
     print(f"ERROR: {_tray_exe} not found. Build ollama-tray.spec first.", file=_sys.stderr)
     raise SystemExit(1)
 
+_cfg_file = str(_here / "config.properties")
+if not os.path.exists(_cfg_file):
+    print(f"Warning: {_cfg_file} not found — config will not be bundled.", file=_sys.stderr)
+    _datas = [(_tray_exe, ".")]
+else:
+    _datas = [(_tray_exe, "."), (_cfg_file, ".")]
+
 a = Analysis(
     [_src],
     pathex=[str(_here)],
     binaries=[],
-    datas=[(_tray_exe, ".")],
+    datas=_datas,
     hiddenimports=["winreg", "tkinter", "tkinter.font"],
     hookspath=[],
     hooksconfig={},

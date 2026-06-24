@@ -5,9 +5,7 @@ and hot-reloads when the file changes on disk via watchdog.
 Search order for config.properties:
   1. Directory of the frozen executable (PyInstaller builds)
   2. Repository / install root  (two levels above this file)
-  3. User config dir:
-       Windows → %APPDATA%\\OllamaTray\\config.properties
-       Linux   → ~/.config/ollama-tray/config.properties
+  3. User config dir: ~/.ollama-tray/config.properties
 """
 import configparser
 import os
@@ -24,14 +22,7 @@ def _find_config() -> Path | None:
     if getattr(sys, "frozen", False):
         candidates.append(Path(sys.executable).parent / "config.properties")
     candidates.append(Path(__file__).parent.parent / "config.properties")
-    if sys.platform == "win32":
-        candidates.append(
-            Path(os.environ.get("APPDATA", "~")) / "OllamaTray" / "config.properties"
-        )
-    else:
-        candidates.append(
-            Path.home() / ".config" / "ollama-tray" / "config.properties"
-        )
+    candidates.append(Path.home() / ".ollama-tray" / "config.properties")
     return next((p for p in candidates if p.exists()), None)
 
 
@@ -299,10 +290,7 @@ def _apply(cp: configparser.ConfigParser) -> None:
 
 def _init_default_config() -> Path | None:
     """Write default config.properties to the user config dir; return its path."""
-    if sys.platform == "win32":
-        dest = Path(os.environ.get("APPDATA", "~")) / "OllamaTray" / "config.properties"
-    else:
-        dest = Path.home() / ".config" / "ollama-tray" / "config.properties"
+    dest = Path.home() / ".ollama-tray" / "config.properties"
     try:
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(_DEFAULT_CONFIG_TEXT, encoding="utf-8")
