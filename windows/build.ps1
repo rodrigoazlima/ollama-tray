@@ -17,8 +17,8 @@ pyinstaller "$SetupSpec" --distpath="$Dist" --workpath="$Build"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ""
-Write-Host "Built:  $Dist\ollama-tray.exe"
-Write-Host "        $Dist\setup.exe"
+Write-Host "Built:  $Dist\setup.exe          (self-contained installer, bundles the tray app)"
+Write-Host "        $Dist\ollama-tray.exe   (standalone tray — no install needed)"
 Write-Host ""
-Write-Host "Distribute both files together."
-Write-Host "Users run setup.exe to install dependencies and start the tray."
+Write-Host "setup.exe bundles ollama-tray.exe inside it."
+Write-Host "Users only need setup.exe to install. No Python required."

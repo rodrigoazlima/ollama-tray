@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 
 import ollama_tray.config as _cfg
+from ollama_tray import __version__
 from ollama_tray.stats import _fmt_bytes, fmt_expires, refresh_stats, start_ps_poller
 
 _dialog_lock      = threading.Lock()
@@ -129,12 +130,34 @@ def _run_dialog() -> None:
             activebackground=c["green_act"], activeforeground=c["bg"],
         ).pack(side="left")
 
-        footer = tk.Label(
-            root, text="",
+        footer_frame = tk.Frame(root, bg=c["bg_dark"], pady=5, padx=8)
+        footer_frame.pack(fill="x")
+
+        footer_time = tk.Label(
+            footer_frame, text="",
             bg=c["bg_dark"], fg=c["dim"],
-            font=(_MONO_FONT, 9), anchor="w", padx=8, pady=4,
+            font=(_MONO_FONT, 9), anchor="w",
         )
-        footer.pack(fill="x")
+        footer_time.pack(side="left", fill="x", expand=True)
+
+        tk.Label(
+            footer_frame, text=f"v{__version__}",
+            bg=c["bg_dark"], fg=c["dim"],
+            font=(_MONO_FONT, 9),
+        ).pack(side="right", padx=(0, 4))
+
+        def _open_settings_from_dialog():
+            from ollama_tray.settings_dialog import open_settings_dialog
+            open_settings_dialog()
+
+        tk.Button(
+            footer_frame, text="Settings…",
+            command=_open_settings_from_dialog,
+            bg=c["surface"], fg=c["fg"],
+            font=(_UI_FONT, 9),
+            relief="flat", padx=8, pady=2, cursor="hand2",
+            activebackground=c["surface1"], activeforeground=c["fg"],
+        ).pack(side="right", padx=(0, 6))
 
         def _cpu_tag(pct: float) -> str:
             return "good" if pct < 30 else "warn" if pct < 70 else "bad"
@@ -151,7 +174,7 @@ def _run_dialog() -> None:
             if s.is_empty():
                 txt.insert("end", "\n  No Ollama processes found.\n\n", "dim")
                 txt.insert("end", "  Service may be stopped.\n", "dim")
-                btn_frame.pack(fill="x", before=footer)
+                btn_frame.pack(fill="x", before=footer_frame)
             else:
                 btn_frame.pack_forget()
                 txt.insert("end",
@@ -220,8 +243,8 @@ def _run_dialog() -> None:
                         txt.insert("end", detail + "\n", "dim")
 
             txt.configure(state="disabled")
-            footer.configure(
-                text=f"  Updated {datetime.now().strftime('%H:%M:%S')}   · 1 s refresh"
+            footer_time.configure(
+                text=f"  Updated {datetime.now().strftime('%H:%M:%S')}"
             )
             root.after(1000, _update)
 
