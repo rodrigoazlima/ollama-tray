@@ -1,3 +1,4 @@
+import collections
 import json
 import threading
 import time
@@ -102,11 +103,13 @@ def start_ps_poller(base_url: str) -> None:
 # ── NVML VRAM (NVIDIA, optional) ─────────────────────────────────────────────
 
 _pynvml_missing: bool = False
+_nvml_init_done: bool = False
+_nvml_handles:   list = []
 
 
 def _try_vram_nvml() -> tuple[int, int] | None:
     """Returns (used_bytes, total_bytes) across all NVIDIA GPUs, or None."""
-    global _pynvml_missing
+    global _pynvml_missing, _nvml_init_done, _nvml_handles
     if _pynvml_missing:
         return None
     try:
@@ -114,16 +117,23 @@ def _try_vram_nvml() -> tuple[int, int] | None:
     except ImportError:
         _pynvml_missing = True
         return None
+    if not _nvml_init_done:
+        _nvml_init_done = True
+        try:
+            pynvml.nvmlInit()
+            n = pynvml.nvmlDeviceGetCount()
+            _nvml_handles = [pynvml.nvmlDeviceGetHandleByIndex(i) for i in range(n)]
+        except Exception:
+            pass
+    if not _nvml_handles:
+        return None
     try:
-        pynvml.nvmlInit()
-        n = pynvml.nvmlDeviceGetCount()
         used = total = 0
-        for i in range(n):
-            h = pynvml.nvmlDeviceGetHandleByIndex(i)
+        for h in _nvml_handles:
             m = pynvml.nvmlDeviceGetMemoryInfo(h)
             used  += m.used
             total += m.total
-        return (used, total)
+        return (used, total) if total else None
     except Exception:
         return None
 
@@ -134,17 +144,40 @@ _stats_lock    = threading.Lock()
 _current_stats = OllamaStats()
 _proc_handles: dict[int, psutil.Process] = {}
 
+# Throttle expensive full-process-list scan to at most once per interval.
+_last_proc_scan:     float = 0.0
+_PROC_SCAN_INTERVAL: float = 8.0   # seconds between psutil.process_iter() calls
 
-def refresh_stats() -> OllamaStats:
-    global _proc_handles, _current_stats
+# Ring buffers for history charts (one sample per refresh_stats() call).
+_HISTORY_LEN = 60
+_history_lock = threading.Lock()
+_history_cpu: collections.deque = collections.deque(maxlen=_HISTORY_LEN)
+_history_ram: collections.deque = collections.deque(maxlen=_HISTORY_LEN)
+_last_refresh_time: float = 0.0
 
+
+def get_history() -> tuple[list[float], list[int]]:
+    """Return (cpu_pct_list, mem_rss_list) snapshots, oldest first."""
+    with _history_lock:
+        return list(_history_cpu), list(_history_ram)
+
+
+def last_refresh_time() -> float:
+    """Monotonic timestamp of the last refresh_stats() call."""
+    return _last_refresh_time
+
+
+def _scan_processes() -> None:
+    """Run psutil.process_iter() and update _proc_handles in place."""
+    global _last_proc_scan
     live = [
         p for p in psutil.process_iter(["name", "pid"])
         if "ollama" in (p.info.get("name") or "").lower()
     ]
     live_pids = {p.pid for p in live}
-    _proc_handles = {pid: h for pid, h in _proc_handles.items() if pid in live_pids}
-
+    for pid in list(_proc_handles):
+        if pid not in live_pids:
+            _proc_handles.pop(pid, None)
     for p in live:
         if p.pid not in _proc_handles:
             try:
@@ -152,6 +185,18 @@ def refresh_stats() -> OllamaStats:
                 _proc_handles[p.pid] = p
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
+    _last_proc_scan = time.monotonic()
+
+
+def refresh_stats() -> OllamaStats:
+    global _proc_handles, _current_stats, _last_refresh_time
+
+    now = time.monotonic()
+    # Full process scan: on startup, when no handles exist, or every N seconds.
+    # Between scans we reuse cached Process objects — much cheaper than
+    # iterating all system processes on every tick.
+    if not _proc_handles or (now - _last_proc_scan) >= _PROC_SCAN_INTERVAL:
+        _scan_processes()
 
     s = OllamaStats()
     s.procs = []
@@ -189,9 +234,21 @@ def refresh_stats() -> OllamaStats:
 
     with _stats_lock:
         _current_stats = s
+
+    with _history_lock:
+        _history_cpu.append(s.cpu_pct)
+        _history_ram.append(s.mem_rss)
+
+    _last_refresh_time = now
     return s
 
 
 def current_stats() -> OllamaStats:
     with _stats_lock:
         return _current_stats
+
+
+def force_scan_next() -> None:
+    """Force a full process scan on the next refresh_stats() call."""
+    global _last_proc_scan
+    _last_proc_scan = 0.0

@@ -5,7 +5,10 @@ from datetime import datetime
 
 import ollama_tray.config as _cfg
 from ollama_tray import __version__
-from ollama_tray.stats import _fmt_bytes, fmt_expires, refresh_stats, start_ps_poller
+from ollama_tray.stats import (
+    _fmt_bytes, fmt_expires, current_stats, get_history,
+    last_refresh_time, start_ps_poller,
+)
 
 _dialog_lock      = threading.Lock()
 _dialog_open      = False
@@ -114,22 +117,63 @@ def _run_dialog() -> None:
         txt.tag_configure("dim",    foreground=c["dim"])
         txt.tag_configure("sep",    foreground=c["surface"])
 
+        # ── action buttons ────────────────────────────────────────────────────
         btn_frame = tk.Frame(root, bg=c["bg_dark"], pady=6, padx=12)
 
         def _start_ollama():
             from ollama_tray.platform import service_action
-            import threading
+            from ollama_tray.stats import force_scan_next
+            force_scan_next()
             threading.Thread(target=service_action, args=("start",), daemon=True).start()
 
-        tk.Button(
+        def _force_kill():
+            import psutil
+            from ollama_tray.stats import force_scan_next
+            for p in psutil.process_iter(["name", "pid"]):
+                if "ollama" in (p.info.get("name") or "").lower():
+                    try:
+                        p.kill()
+                    except psutil.NoSuchProcess:
+                        pass
+            force_scan_next()
+
+        btn_start = tk.Button(
             btn_frame, text="Start Ollama",
             command=_start_ollama,
             bg=c["green"], fg=c["bg"],
             font=(_UI_FONT, 10, "bold"),
             relief="flat", padx=14, pady=5, cursor="hand2",
             activebackground=c["green_act"], activeforeground=c["bg"],
-        ).pack(side="left")
+        )
+        btn_kill = tk.Button(
+            btn_frame, text="Force Kill All",
+            command=_force_kill,
+            bg=c["red"], fg=c["fg"],
+            font=(_UI_FONT, 10, "bold"),
+            relief="flat", padx=14, pady=5, cursor="hand2",
+            activebackground="#c0392b", activeforeground=c["fg"],
+        )
 
+        # ── history chart ─────────────────────────────────────────────────────
+        CHART_W, CHART_H = 420, 60
+        chart_frame = tk.Frame(root, bg=c["bg_dark"], padx=12, pady=4)
+        chart_frame.pack(fill="x")
+
+        legend_row = tk.Frame(chart_frame, bg=c["bg_dark"])
+        legend_row.pack(fill="x")
+        tk.Label(legend_row, text="■ CPU%", bg=c["bg_dark"], fg=c["blue"],
+                 font=(_MONO_FONT, 8)).pack(side="left")
+        tk.Label(legend_row, text="■ RAM",  bg=c["bg_dark"], fg=c["green"],
+                 font=(_MONO_FONT, 8)).pack(side="left", padx=(8, 0))
+
+        chart_canvas = tk.Canvas(
+            chart_frame,
+            width=CHART_W, height=CHART_H,
+            bg=c["bg_dark"], highlightthickness=0,
+        )
+        chart_canvas.pack()
+
+        # ── footer ────────────────────────────────────────────────────────────
         footer_frame = tk.Frame(root, bg=c["bg_dark"], pady=5, padx=8)
         footer_frame.pack(fill="x")
 
@@ -165,8 +209,37 @@ def _run_dialog() -> None:
         def _mem_tag(mb: float) -> str:
             return "good" if mb < 2048 else "warn" if mb < 6144 else "bad"
 
+        def _draw_chart() -> None:
+            cpu_hist, ram_hist = get_history()
+            chart_canvas.delete("all")
+            n = len(cpu_hist)
+            if n < 2:
+                return
+            W, H = CHART_W, CHART_H
+
+            # grid lines at 25%, 50%, 75%
+            for frac in (0.25, 0.5, 0.75):
+                y = H - frac * H
+                chart_canvas.create_line(0, y, W, y, fill=c["surface"], width=1)
+
+            def _polyline(values: list, max_val: float, color: str) -> None:
+                if max_val <= 0:
+                    return
+                pts: list[float] = []
+                for i, v in enumerate(values):
+                    x = W * i / (n - 1)
+                    y = H - max(0.0, min(1.0, v / max_val)) * H
+                    pts.extend((x, y))
+                if len(pts) >= 4:
+                    chart_canvas.create_line(*pts, fill=color, width=1, smooth=True)
+
+            max_ram = max(ram_hist) if ram_hist else 1
+            _polyline(list(cpu_hist), 100.0,  c["blue"])
+            _polyline(list(ram_hist), max_ram, c["green"])
+
         def _update() -> None:
-            s = refresh_stats()
+            # Use cached stats — the poll thread drives refresh_stats().
+            s = current_stats()
             txt.configure(state="normal")
             txt.delete("1.0", "end")
             sep = "─" * 50 + "\n"
@@ -174,9 +247,14 @@ def _run_dialog() -> None:
             if s.is_empty():
                 txt.insert("end", "\n  No Ollama processes found.\n\n", "dim")
                 txt.insert("end", "  Service may be stopped.\n", "dim")
-                btn_frame.pack(fill="x", before=footer_frame)
+                btn_kill.pack_forget()
+                btn_start.pack(side="left")
+                btn_frame.pack(fill="x", before=chart_frame)
             else:
-                btn_frame.pack_forget()
+                btn_start.pack_forget()
+                btn_kill.pack(side="left")
+                btn_frame.pack(fill="x", before=chart_frame)
+
                 txt.insert("end",
                     f"  {'Process':<22} {'PID':>6}  {'CPU%':>6}  {'RSS':>9}\n", "header")
                 txt.insert("end", "  " + sep, "sep")
@@ -243,9 +321,13 @@ def _run_dialog() -> None:
                         txt.insert("end", detail + "\n", "dim")
 
             txt.configure(state="disabled")
-            footer_time.configure(
-                text=f"  Updated {datetime.now().strftime('%H:%M:%S')}"
-            )
+            _draw_chart()
+
+            ts = last_refresh_time()
+            if ts:
+                footer_time.configure(
+                    text=f"  Updated {datetime.now().strftime('%H:%M:%S')}"
+                )
             root.after(1000, _update)
 
         _update()

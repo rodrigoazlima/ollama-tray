@@ -67,12 +67,15 @@ class OllamaTray:
 
     def _poll(self):
         from ollama_tray.platform import get_status, service_action
+        _prev_cpu:   float = -1.0
+        _prev_procs: int   = -1
         while True:
             time.sleep(_cfg.STATS_INTERVAL)
             self._tick += 1
 
-            refresh_stats()
+            s = refresh_stats()
 
+            status_changed = False
             if self._tick % _cfg.STATUS_INTERVAL == 0:
                 new = get_status()
                 with self._lock:
@@ -82,11 +85,19 @@ class OllamaTray:
                                 target=service_action, args=("start",), daemon=True
                             ).start()
                         self._status = new
+                        status_changed = True
                         if self._icon:
                             self._icon.icon  = make_icon(new)
                             self._icon.title = f"Ollama — {new.capitalize()}"
 
-            if self._icon:
+            # Only rebuild the tray menu when something visible changed.
+            stats_changed = (
+                abs(s.cpu_pct - _prev_cpu) >= 0.5
+                or s.num_procs != _prev_procs
+            )
+            if (stats_changed or status_changed) and self._icon:
+                _prev_cpu   = s.cpu_pct
+                _prev_procs = s.num_procs
                 try:
                     self._icon.update_menu()
                 except Exception:

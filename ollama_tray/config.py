@@ -103,7 +103,7 @@ min_ollama_version = 0.1.14
 # ── Tray polling ──────────────────────────────────────────────────────────────
 
 # Seconds between CPU/RAM stat refreshes
-stats_interval = 1
+stats_interval = 3
 
 # Number of stat ticks between service-status re-checks  (status_interval × stats_interval = s)
 status_interval = 5
@@ -255,7 +255,7 @@ def _apply(cp: configparser.ConfigParser) -> None:
     g["OLLAMA_URL"]        = _s  (cp, "ollama_url",          "http://localhost:11434")
     g["SERVE_HOST"]        = _s  (cp, "ollama_serve_host",   "127.0.0.1:11434")
     g["MIN_OLLAMA"]        = _ver(cp, "min_ollama_version",  (0, 1, 14))
-    g["STATS_INTERVAL"]    = _i  (cp, "stats_interval",      1)
+    g["STATS_INTERVAL"]    = _i  (cp, "stats_interval",      3)
     g["STATUS_INTERVAL"]   = _i  (cp, "status_interval",     5)
     g["TOGGLE_DEBOUNCE_S"] = _f  (cp, "toggle_debounce",     0.6)
     g["ICON_SIZE"]         = _i  (cp, "icon_size",           64)
