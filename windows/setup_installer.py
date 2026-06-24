@@ -28,12 +28,40 @@ def _bundled_tray_exe() -> Path | None:
     return None
 
 
+def _uninstall_previous() -> list[str]:
+    """Stop ollama-tray, ollama, and llama.cpp; remove existing installation."""
+    msgs: list[str] = []
+    for proc in (_EXE_NAME, "ollama.exe", "llama-server.exe", "llama.cpp"):
+        result = subprocess.run(["taskkill", "/F", "/IM", proc], capture_output=True)
+        if result.returncode == 0:
+            msgs.append(f"Stopped: {proc}")
+    time.sleep(0.5)
+    dst = _INSTALL_DIR / _EXE_NAME
+    if dst.exists():
+        try:
+            dst.unlink()
+            msgs.append(f"Removed previous: {dst}")
+        except Exception as e:
+            msgs.append(f"Warning: could not remove previous exe: {e}")
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0, winreg.KEY_SET_VALUE,
+        )
+        winreg.DeleteValue(key, _TASK_NAME)
+        winreg.CloseKey(key)
+        msgs.append(f"Removed autostart entry: {_TASK_NAME}")
+    except FileNotFoundError:
+        pass
+    except Exception as e:
+        msgs.append(f"Warning: autostart removal: {e}")
+    return msgs
+
+
 def _install(src: Path) -> Path:
     _INSTALL_DIR.mkdir(parents=True, exist_ok=True)
     dst = _INSTALL_DIR / _EXE_NAME
-    if dst.exists():
-        subprocess.run(["taskkill", "/F", "/IM", _EXE_NAME], capture_output=True)
-        time.sleep(0.5)
     shutil.copy2(src, dst)
     return dst
 
@@ -111,6 +139,11 @@ def run_gui() -> None:
     def _do_install() -> None:
         btn.configure(state="disabled")
         root.update_idletasks()
+
+        status_var.set("Uninstalling previous version...")
+        root.update_idletasks()
+        for msg in _uninstall_previous():
+            _log(msg, DIM)
 
         status_var.set("Locating ollama-tray...")
         root.update_idletasks()
