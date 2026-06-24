@@ -25,6 +25,19 @@ _FONT_UI   = "Segoe UI"   if sys.platform == "win32" else "Noto Sans"
 _FONT_MONO = "Consolas"   if sys.platform == "win32" else "Hack"
 
 
+def _find_asset(name: str) -> str | None:
+    """Return path to bundled asset; works in both frozen (PyInstaller) and dev contexts."""
+    from pathlib import Path
+    candidates: list[Path] = []
+    if getattr(sys, "frozen", False):
+        candidates.append(Path(sys._MEIPASS) / "assets" / name)
+    candidates.append(Path(__file__).parent.parent / "assets" / name)
+    for p in candidates:
+        if p.exists():
+            return str(p)
+    return None
+
+
 class StartupError(Exception):
     pass
 
@@ -357,6 +370,7 @@ def _show_ollama_start_dialog() -> None:
     """
     import tkinter as tk
     from tkinter import ttk
+    import ollama_tray.config as _cfg_live
 
     root = tk.Tk()
     root.title("Start Ollama")
@@ -364,19 +378,44 @@ def _show_ollama_start_dialog() -> None:
     root.configure(bg=_COLOR["bg"])
     root.attributes("-topmost", True)
 
-    w, h = 480, 390
+    # ── window icon ───────────────────────────────────────────────────────────
+    _ico_path = _find_asset("ollama.ico")
+    if _ico_path and sys.platform == "win32":
+        try:
+            root.iconbitmap(_ico_path)
+        except Exception:
+            pass
+
+    w, h = 480, 400
     root.update_idletasks()
     x = (root.winfo_screenwidth()  - w) // 2
     y = (root.winfo_screenheight() - h) // 2
     root.geometry(f"{w}x{h}+{x}+{y}")
 
-    # ── header ────────────────────────────────────────────────────────────────
+    # ── header with logo ──────────────────────────────────────────────────────
+    header_frame = tk.Frame(root, bg=_COLOR["surface"])
+    header_frame.pack(fill="x")
+
+    _logo_ref = None  # keep PhotoImage alive
+    _logo_png = _find_asset("ollama-icon.png")
+    if _logo_png:
+        try:
+            from PIL import Image, ImageTk
+            _logo_pil = Image.open(_logo_png).convert("RGBA").resize((36, 36), Image.LANCZOS)
+            _logo_ref = ImageTk.PhotoImage(_logo_pil)
+            tk.Label(
+                header_frame, image=_logo_ref,
+                bg=_COLOR["surface"],
+            ).pack(side="left", padx=(10, 4), pady=6)
+        except Exception:
+            pass
+
     tk.Label(
-        root, text="  Ollama is Not Running",
+        header_frame, text="Ollama is Not Running",
         bg=_COLOR["surface"], fg=_COLOR["fg"],
         font=(_FONT_UI, 11, "bold"),
-        anchor="w", padx=8, pady=7,
-    ).pack(fill="x")
+        anchor="w", padx=4, pady=7,
+    ).pack(side="left", fill="x")
 
     tk.Label(
         root,
@@ -408,7 +447,7 @@ def _show_ollama_start_dialog() -> None:
 
     # ── host ──────────────────────────────────────────────────────────────────
     _label_row("Host", "→ OLLAMA_HOST")
-    host_var = tk.StringVar(value=SERVE_HOST)
+    host_var = tk.StringVar(value=_cfg_live.SERVE_HOST)
     tk.Entry(
         body, textvariable=host_var,
         bg=_COLOR["surface"], fg=_COLOR["fg"], insertbackground=_COLOR["fg"],
@@ -417,8 +456,7 @@ def _show_ollama_start_dialog() -> None:
 
     # ── model ─────────────────────────────────────────────────────────────────
     model_row = _label_row("Model to preload", "  (optional — loads into memory after start)")
-    from ollama_tray.config import PRELOAD_MODEL
-    model_var = tk.StringVar(value=PRELOAD_MODEL or "(none)")
+    model_var = tk.StringVar(value=_cfg_live.PRELOAD_MODEL or "(none)")
 
     style = ttk.Style()
     style.theme_use("default")
